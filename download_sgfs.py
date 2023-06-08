@@ -26,7 +26,7 @@ for i, link in enumerate(soup.findAll('a')):
     # print(_FULLURL)
     if ZIP_NAME.endswith('.zip') and ZIP_NAME[0] == 'b' and ZIP_NAME[1] != '6' and ZIP_NAME[1:3] != '10' and not ZIP_NAME[:-4] in os.listdir(refined_log_dir):
         counter += 1
-        if counter > 100:
+        if counter > 30:
             break
         zip_path = os.path.join(selfplay_dir, ZIP_NAME)
         refined_log_path = os.path.join(refined_log_dir, ZIP_NAME[:-4])
@@ -41,16 +41,17 @@ for i, link in enumerate(soup.findAll('a')):
             # names.append(soup.select('a')[i].attrs['href'])
             with open(zip_path, 'wb') as f:
                 f.write(zip_opened.read())
+        if not os.path.exists(zip_path[:-4]):
+            with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                zip_ref.extractall(members=[member for member in zip_ref.infolist() if 'sgfs' in str(member)],
+                                   path=selfplay_dir)
+            os.unlink(zip_path)
         if not os.path.exists(refined_log_path):
             print(f'Extracting zip {ZIP_NAME} and processing selfplay')
-            if not os.path.exists(zip_path[:-4]):
-                with zipfile.ZipFile(zip_path, "r") as zip_ref:
-                    zip_ref.extractall(members=[member for member in zip_ref.infolist() if 'sgfs' in str(member)], path=selfplay_dir)
-                os.unlink(zip_path)
-            process_selfplay()
+            process_selfplay(ZIP_NAME[:-4])
             assert os.path.exists(refined_log_path)
-            shutil.rmtree(zip_path[:-4], ignore_errors=True)
-        print('HA!')
+            # shutil.rmtree(zip_path[:-4], ignore_errors=True)
+        #print('HA!')
         # break
 
 # names_urls = zip(names, urls)

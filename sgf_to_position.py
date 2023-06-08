@@ -85,30 +85,26 @@ refined_log_dir = os.path.join(PROJECT_ROOT, "refined_logs")
 log_dir = os.path.join(PROJECT_ROOT, "analysis_logs")
 
 
-def process_selfplay():
-    for folder in os.listdir(selfplay_dir):
-        batchpath = os.path.join(selfplay_dir, folder, 'sgfs')
-        try:
-            # Assume that batchpath is a directory
-            log_folder = os.path.join(log_dir, folder)
-            refined_log_folder = os.path.join(refined_log_dir, folder)
-            for sgfs_file in os.listdir(batchpath):
-                if sgfs_file.endswith('.sgfs'):
-                    log_filename = sgfs_file[:-5] + ".log"
-                    refined_logfile = os.path.join(refined_log_folder, log_filename)
-                    if not os.path.exists(refined_logfile):
-                        sgfs_path = os.path.join(batchpath, sgfs_file)
-                        os.makedirs(log_folder, exist_ok=True)
-                        os.makedirs(refined_log_folder, exist_ok=True)
-                        logfile = os.path.join(log_folder, log_filename)
-                        analyze_sgfs(sgfs_path, logfile=logfile)
-                        print(f'Analyzed {folder}: {sgfs_file}!')
-                        simplify_log(logfile, refined_logfile)
-                        assert os.path.exists(refined_logfile), f"Refined logfile {folder}/{log_filename} not created yet!"
-                        os.unlink(logfile)
+def process_selfplay(folder):
+    batchpath = os.path.join(selfplay_dir, folder, 'sgfs')
+    # Assume that batchpath is a directory
+    log_folder = os.path.join(log_dir, folder)
+    refined_log_folder = os.path.join(refined_log_dir, folder)
+    for sgfs_file in os.listdir(batchpath):
+        if sgfs_file.endswith('.sgfs'):
+            log_filename = sgfs_file[:-5] + ".log"
+            refined_logfile = os.path.join(refined_log_folder, log_filename)
+            if not os.path.exists(refined_logfile):
+                sgfs_path = os.path.join(batchpath, sgfs_file)
+                os.makedirs(log_folder, exist_ok=True)
+                os.makedirs(refined_log_folder, exist_ok=True)
+                logfile = os.path.join(log_folder, log_filename)
+                analyze_sgfs(sgfs_path, logfile=logfile)
+                print(f'Analyzed {folder}: {sgfs_file}!')
+                simplify_log(logfile, refined_logfile)
+                assert os.path.exists(refined_logfile), f"Refined logfile {folder}/{log_filename} not created yet!"
+                os.unlink(logfile)
 
-        except FileNotFoundError:
-            continue
 # input()
 # sgf_string_illegal = """(;FF[4]GM[1]SZ[19]PB[b20c256-s344142336-d171075566]PW[b20c256-s344142336-d171075566]HA[3]KM[17]RU[koSIMPLEscoreAREAtaxNONEsui1button1]RE[B+3.5]AB[cd][gf][pp]C[startTurnIdx=277,mode=0,modeM1=0,modeM2=1,newNeuralNetTurn345=b20c256-s344987392-d171300566];B[qd];W[cp];B[fc];W[ee];B[fd];W[oc];B[mc];W[pf];B[od];W[nd];B[oe];W[nc];B[pc];W[dd];B[ce];W[dc];B[jc])"""
 
