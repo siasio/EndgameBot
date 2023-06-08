@@ -15,6 +15,7 @@ def get_base_id(pos_id):
     # The IDs have form G{number_of_game}M{number_of_move}{player} where player is 'B' or 'W'
     return pos_id[:-1]
 
+
 def get_short_id(pos_id):
     # The IDs have form G{number_of_game}M{number_of_move}{player} where player is 'B' or 'W'
     return pos_id.split('M')[0]
@@ -170,14 +171,24 @@ class RequestWithResponse:
 
 
 class PerGameRequestWithResponse:
-    def __init__(self):
+    def __init__(self, short_id=''):
         self.requests_dict: Dict[str, RequestWithResponse] = {}
+        self.short_id = short_id
+        self.sgf = ''
 
     def add_request_response(self, request_response: RequestWithResponse):
+        short_id = get_short_id(request_response.pos_id)
+        assert short_id == self.short_id, f'IDs don\'t match. Trying to register {short_id} instead of {self.short_id}'
         self.requests_dict[request_response.pos_id] = request_response
+
+    def add_sgf(self, sgf):
+        assert len(sgf) == 0, f'Sgf being registered more than once for {self.short_id}'
+        self.sgf = sgf
 
     def __repr__(self):
         jsons_dict = {key: self.requests_dict[key].merged_dict() for key in self.requests_dict}
+        jsons_dict['id'] = self.short_id
+        jsons_dict['sgf'] = self.sgf
         return json.dumps(jsons_dict)
 
 
@@ -186,48 +197,61 @@ requests_with_responses_dict: Dict[str, RequestWithResponse] = {}
 per_game_requests_responses: Dict[str, PerGameRequestWithResponse] = {}
 
 
-def simplify_log(filepath, new_filepath):
+def simplify_log(filepath, new_filepath, sgfs_path):
     used_ids = set()
     with open(filepath, 'r') as log_file:
-
-        for l in tqdm(log_file):
-            l = l.strip()
-            if REQUEST_STR in l or RESPONSE_STR in l:
-                assert not (REQUEST_STR in l and RESPONSE_STR in l), f'Strange line {l}'
-                line_split = l.split(REQUEST_STR)[-1].split(RESPONSE_STR)[-1]
-                # assert len(line_split) == 2, f'{filepath}: Found {len(line_split) - 1} substrings "{REQUEST_STR}" in {l}'
-                cur_dict = json.loads(line_split)
-                pos_id = cur_dict['id']
-                base_id = get_base_id(pos_id)
-                short_id = get_short_id(pos_id)
-                line_type = 'rq' if REQUEST_STR in l else 'rsp'
-                used_id = f'{line_type}:{pos_id}'
-                if used_id in used_ids:
-                    print(f'{filepath}: Found two rows {used_id}')
-                    continue
-                    # input()
-                # assert used_id not in used_ids, f'Found two rows {used_id}'
-                used_ids.add(used_id)
-                try:
-                    cur_request_response = requests_with_responses_dict[base_id]
-
-                except KeyError:
-                    cur_request_response = RequestWithResponse()
-                    requests_with_responses_dict[base_id] = cur_request_response
-
-                finally:
-                    cur_request_response.register_line(cur_dict)
-                    if cur_request_response.completed:
-                        cur_request_response = requests_with_responses_dict.pop(base_id)
+        with open(sgfs_path, 'r') as sgfs:
+            sgfs_dict = {f'G{i}': sgf for i, sgf in enumerate(sgfs.read().splitlines(), 1)}
+            for l in tqdm(log_file):
+                l = l.strip()
+                if REQUEST_STR in l or RESPONSE_STR in l:
+                    assert not (REQUEST_STR in l and RESPONSE_STR in l), f'Strange line {l}'
+                    line_split = l.split(REQUEST_STR)[-1].split(RESPONSE_STR)[-1]
+                    # assert len(line_split) == 2, f'{filepath}: Found {len(line_split) - 1} substrings "{REQUEST_STR}" in {l}'
+                    cur_dict = json.loads(line_split)
+                    pos_id = cur_dict['id']
+                    base_id = get_base_id(pos_id)
+                    short_id = get_short_id(pos_id)
+                    try:
+                        cur_sgf = sgfs_dict.pop(short_id)
                         try:
                             cur_per_game_request_response = per_game_requests_responses[short_id]
                         except KeyError:
-                            cur_per_game_request_response = PerGameRequestWithResponse()
+                            cur_per_game_request_response = PerGameRequestWithResponse(short_id)
                             per_game_requests_responses[short_id] = cur_per_game_request_response
                         finally:
-                            cur_per_game_request_response.add_request_response(cur_request_response)
-                        # new_file.write(f'{cur_request_response}\n')
-                        # del cur_request_response
+                            cur_per_game_request_response.add_sgf(cur_sgf)
+                    except KeyError:
+                        # the sgf string was already popped and registered
+                        pass
+                    line_type = 'rq' if REQUEST_STR in l else 'rsp'
+                    used_id = f'{line_type}:{pos_id}'
+                    if used_id in used_ids:
+                        print(f'{filepath}: Found two rows {used_id}')
+                        continue
+                        # input()
+                    # assert used_id not in used_ids, f'Found two rows {used_id}'
+                    used_ids.add(used_id)
+                    try:
+                        cur_request_response = requests_with_responses_dict[base_id]
+
+                    except KeyError:
+                        cur_request_response = RequestWithResponse()
+                        requests_with_responses_dict[base_id] = cur_request_response
+
+                    finally:
+                        cur_request_response.register_line(cur_dict)
+                        if cur_request_response.completed:
+                            cur_request_response = requests_with_responses_dict.pop(base_id)
+                            try:
+                                cur_per_game_request_response = per_game_requests_responses[short_id]
+                            except KeyError:
+                                cur_per_game_request_response = PerGameRequestWithResponse(short_id)
+                                per_game_requests_responses[short_id] = cur_per_game_request_response
+                            finally:
+                                cur_per_game_request_response.add_request_response(cur_request_response)
+                            # new_file.write(f'{cur_request_response}\n')
+                            # del cur_request_response
 
         with open(new_filepath, 'w') as new_file:
             for per_game in per_game_requests_responses.values():

@@ -101,7 +101,7 @@ def process_selfplay(folder):
                 logfile = os.path.join(log_folder, log_filename)
                 analyze_sgfs(sgfs_path, logfile=logfile)
                 print(f'Analyzed {folder}: {sgfs_file}!')
-                simplify_log(logfile, refined_logfile)
+                simplify_log(logfile, refined_logfile, sgfs_path)
                 assert os.path.exists(refined_logfile), f"Refined logfile {folder}/{log_filename} not created yet!"
                 os.unlink(logfile)
 

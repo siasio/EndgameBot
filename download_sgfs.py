@@ -50,7 +50,7 @@ for i, link in enumerate(soup.findAll('a')):
             print(f'Extracting zip {ZIP_NAME} and processing selfplay')
             process_selfplay(ZIP_NAME[:-4])
             assert os.path.exists(refined_log_path)
-            # shutil.rmtree(zip_path[:-4], ignore_errors=True)
+            shutil.rmtree(zip_path[:-4], ignore_errors=True)
         #print('HA!')
         # break
 
