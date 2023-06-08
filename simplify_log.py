@@ -15,6 +15,10 @@ def get_base_id(pos_id):
     # The IDs have form G{number_of_game}M{number_of_move}{player} where player is 'B' or 'W'
     return pos_id[:-1]
 
+def get_short_id(pos_id):
+    # The IDs have form G{number_of_game}M{number_of_move}{player} where player is 'B' or 'W'
+    return pos_id.split('M')[0]
+
 
 class RequestWithResponse:
     def __init__(self):
@@ -65,8 +69,15 @@ class RequestWithResponse:
     #     return None if self.request_dict is None else self.request_dict['initialPlayer']
 
     @property
+    def is_final(self):
+        return 'last' in self.pos_id
+
+    @property
     def completed(self):
-        return self.registered_w_request and self.registered_b_request and self.registered_b_response and self.registered_w_response
+        if not self.is_final:
+            return self.registered_w_request and self.registered_b_request and self.registered_b_response and self.registered_w_response
+
+        return (self.registered_w_request and self.registered_w_response) or (self.registered_b_request and self.registered_b_response)
 
     @property
     def registered_w_response(self):
@@ -125,14 +136,23 @@ class RequestWithResponse:
         elif self.w_response_dict is not None:
             return get_base_id(self.w_response_dict['id'])
         elif self.b_response_dict is not None:
-            return get_base_id(self.b_response_dict['id'][:-1])
+            return get_base_id(self.b_response_dict['id'])
         return None
 
     def merged_dict(self):
         # not listing moves as in the current use case we have no moves
-        return {'id': self.pos_id, 'size': self.board_size, 'stones': self.stones,
-                'b_own': self.scale_ownerships(self.b_ownership), 'b_score': self.b_score,
-                'w_own': self.scale_ownerships(self.w_ownership), 'w_score': self.w_score}
+        b_scaled = self.scale_ownerships(self.b_ownership)
+        w_scaled = self.scale_ownerships(self.w_ownership)
+        merged = {'id': self.pos_id, 'size': self.board_size, 'stones': self.stones}
+        if b_scaled:
+            merged['b_own'] = b_scaled
+        if w_scaled:
+            merged['w_own'] = w_scaled
+        if self.b_score:
+            merged['b_score'] = f'{self.b_score:.2f}'
+        if self.w_score:
+            merged['w_score'] = f'{self.w_score:.2f}'
+        return merged
 
     @staticmethod
     def scale_ownerships(ownership_list):
@@ -149,46 +169,73 @@ class RequestWithResponse:
         return json.dumps(self.merged_dict())
 
 
+class PerGameRequestWithResponse:
+    def __init__(self):
+        self.requests_dict: Dict[str, RequestWithResponse] = {}
+
+    def add_request_response(self, request_response: RequestWithResponse):
+        self.requests_dict[request_response.pos_id] = request_response
+
+    def __repr__(self):
+        jsons_dict = {key: self.requests_dict[key].merged_dict() for key in self.requests_dict}
+        return json.dumps(jsons_dict)
+
+
 # RequestsResponsesDict = TypedDict('RequestsResponsesDict', {'id': RequestWithResponse})
 requests_with_responses_dict: Dict[str, RequestWithResponse] = {}
-full_requests_responses: Dict[str, RequestWithResponse] = {}
+per_game_requests_responses: Dict[str, PerGameRequestWithResponse] = {}
 
 
 def simplify_log(filepath, new_filepath):
     used_ids = set()
     with open(filepath, 'r') as log_file:
-        with open(new_filepath, 'w') as new_file:
-            for l in tqdm(log_file):
-                l = l.strip()
-                if REQUEST_STR in l or RESPONSE_STR in l:
-                    assert not (REQUEST_STR in l and RESPONSE_STR in l), f'Strange line {l}'
-                    line_split = l.split(REQUEST_STR)[-1].split(RESPONSE_STR)[-1]
-                    # assert len(line_split) == 2, f'{filepath}: Found {len(line_split) - 1} substrings "{REQUEST_STR}" in {l}'
-                    cur_dict = json.loads(line_split)
-                    pos_id = cur_dict['id']
-                    base_id = get_base_id(pos_id)
-                    line_type = 'rq' if REQUEST_STR in l else 'rsp'
-                    used_id = f'{line_type}:{pos_id}'
-                    if used_id in used_ids:
-                        print(f'{filepath}: Found two rows {used_id}')
-                        continue
-                        # input()
-                    # assert used_id not in used_ids, f'Found two rows {used_id}'
-                    used_ids.add(used_id)
-                    try:
-                        cur_request_response = requests_with_responses_dict[base_id]
-                        cur_request_response.register_line(cur_dict)
-                        if cur_request_response.completed:
-                            cur_request_response = requests_with_responses_dict.pop(base_id)
-                            new_file.write(f'{cur_request_response}\n')
-                            del cur_request_response
-                    except KeyError:
-                        new_request_response = RequestWithResponse()
-                        new_request_response.register_line(cur_dict)
-                        requests_with_responses_dict[base_id] = new_request_response
 
-            # print('Requests with responses dict:', requests_with_responses_dict)
-            print(f'Registered {len(used_ids)} lines with responses/requests')
+        for l in tqdm(log_file):
+            l = l.strip()
+            if REQUEST_STR in l or RESPONSE_STR in l:
+                assert not (REQUEST_STR in l and RESPONSE_STR in l), f'Strange line {l}'
+                line_split = l.split(REQUEST_STR)[-1].split(RESPONSE_STR)[-1]
+                # assert len(line_split) == 2, f'{filepath}: Found {len(line_split) - 1} substrings "{REQUEST_STR}" in {l}'
+                cur_dict = json.loads(line_split)
+                pos_id = cur_dict['id']
+                base_id = get_base_id(pos_id)
+                short_id = get_short_id(pos_id)
+                line_type = 'rq' if REQUEST_STR in l else 'rsp'
+                used_id = f'{line_type}:{pos_id}'
+                if used_id in used_ids:
+                    print(f'{filepath}: Found two rows {used_id}')
+                    continue
+                    # input()
+                # assert used_id not in used_ids, f'Found two rows {used_id}'
+                used_ids.add(used_id)
+                try:
+                    cur_request_response = requests_with_responses_dict[base_id]
+
+                except KeyError:
+                    cur_request_response = RequestWithResponse()
+                    requests_with_responses_dict[base_id] = cur_request_response
+
+                finally:
+                    cur_request_response.register_line(cur_dict)
+                    if cur_request_response.completed:
+                        cur_request_response = requests_with_responses_dict.pop(base_id)
+                        try:
+                            cur_per_game_request_response = per_game_requests_responses[short_id]
+                        except KeyError:
+                            cur_per_game_request_response = PerGameRequestWithResponse()
+                            per_game_requests_responses[short_id] = cur_per_game_request_response
+                        finally:
+                            cur_per_game_request_response.add_request_response(cur_request_response)
+                        # new_file.write(f'{cur_request_response}\n')
+                        # del cur_request_response
+
+        with open(new_filepath, 'w') as new_file:
+            for per_game in per_game_requests_responses.values():
+                new_file.write(f'{per_game}\n')
+                del per_game
+
+        # print('Requests with responses dict:', requests_with_responses_dict)
+        print(f'Registered {len(used_ids)} lines with responses/requests from {len(per_game_requests_responses)} games')
 
 # simplify_log(r'analysis_logs/b15c192-s74759936-d68801237/B8F1EB31610F7EE2.log', r'refined_logs/b15c192-s74759936-d68801237/B8F1EB31610F7EE2.log')
 log_dir = 'analysis_logs'
