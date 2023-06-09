@@ -34,7 +34,7 @@ def get_stones_on_board(sgf_string, engine, game_name):
     root = KaTrainSGF(sgf_string).root
     node = root
     game_len = 0
-    number_of_position_to_check = 2
+    number_of_position_to_check = 1
 
     analysed_positions = False
     while True:
@@ -44,7 +44,7 @@ def get_stones_on_board(sgf_string, engine, game_name):
         if not analysed_positions and (node.is_pass or not node.children):
             node_to_analyse = node
             # print(f"Game with {game_len} moves, pass = {node.is_pass}")
-            go_back_max_this_many_moves = int(0.25 * game_len)
+            go_back_max_this_many_moves = int(0.15 * game_len)
             check_every_nth_position = go_back_max_this_many_moves // number_of_position_to_check
             if check_every_nth_position == 0:
                 # The game is very short, we don't want to take a look at it

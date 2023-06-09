@@ -26,7 +26,7 @@ for i, link in enumerate(soup.findAll('a')):
     # print(_FULLURL)
     if ZIP_NAME.endswith('.zip') and ZIP_NAME[0] == 'b' and ZIP_NAME[1] != '6' and ZIP_NAME[1:3] != '10' and not ZIP_NAME[:-4] in os.listdir(refined_log_dir):
         counter += 1
-        if counter > 30:
+        if counter > 20:
             break
         zip_path = os.path.join(selfplay_dir, ZIP_NAME)
         refined_log_path = os.path.join(refined_log_dir, ZIP_NAME[:-4])

@@ -1,5 +1,7 @@
 import json
 import os
+import time
+
 from tqdm import tqdm
 from typing import Dict
 # import yaml
@@ -182,7 +184,7 @@ class PerGameRequestWithResponse:
         self.requests_dict[request_response.pos_id] = request_response
 
     def add_sgf(self, sgf):
-        assert len(sgf) == 0, f'Sgf being registered more than once for {self.short_id}'
+        assert len(self.sgf) == 0, f'Sgf being registered more than once for {self.short_id}'
         self.sgf = sgf
 
     def __repr__(self):
@@ -193,12 +195,17 @@ class PerGameRequestWithResponse:
 
 
 # RequestsResponsesDict = TypedDict('RequestsResponsesDict', {'id': RequestWithResponse})
-requests_with_responses_dict: Dict[str, RequestWithResponse] = {}
-per_game_requests_responses: Dict[str, PerGameRequestWithResponse] = {}
 
 
 def simplify_log(filepath, new_filepath, sgfs_path):
     used_ids = set()
+    requests_with_responses_dict: Dict[str, RequestWithResponse] = {}
+    per_game_requests_responses: Dict[str, PerGameRequestWithResponse] = {}
+    if not os.path.exists(filepath):
+        time.sleep(5)
+    if not os.path.exists(filepath):
+        print(f'{filepath} doesn\'t exist! Aborting simplifying log')
+        return
     with open(filepath, 'r') as log_file:
         with open(sgfs_path, 'r') as sgfs:
             sgfs_dict = {f'G{i}': sgf for i, sgf in enumerate(sgfs.read().splitlines(), 1)}
