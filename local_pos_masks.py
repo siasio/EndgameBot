@@ -68,8 +68,8 @@ class AnalyzedPosition(GoPosition):
         self.num_intersections = pad_size * pad_size
         self.ownership = np.array([[0 for y in range(self.pad_size)]
                                    for x in range(self.pad_size)])
-        self.continous_ownership = np.array([[0 for y in range(self.pad_size)]
-                                             for x in range(self.pad_size)], dtype=np.float)
+        self.continous_ownership = np.array([[0.0 for y in range(self.pad_size)]
+                                             for x in range(self.pad_size)], dtype=float)
         self.final_ownership = np.array([[0 for y in range(self.pad_size)]
                                          for x in range(self.pad_size)])
         self.reset_predictions()
@@ -266,20 +266,24 @@ class AnalyzedPosition(GoPosition):
             local_mask = cv2.dilate(move_array.astype(np.uint8), random.choice(artificial_kernels))
             local_mask = local_mask - np.logical_and(local_mask, self.segmentation)
 
+        local_mask = np.logical_and(local_mask, self.board_mask)
+
         coords, player, _ = self.get_first_local_move(local_mask, node=node.children[0])
 
-        if random.choice([0, 1]):
-            prev_pos = prev_pos[:, ::-1]
-            cur_pos = cur_pos[:, ::-1]
-            local_mask = local_mask[:, ::-1]
-            if coords:
-                coords = (coords[0], self.pad_size - coords[1] - 1)
-        if random.choice([0, 1]):
-            prev_pos = prev_pos[::-1, :]
-            cur_pos = cur_pos[::-1, :]
-            local_mask = local_mask[::-1, :]
-            if coords:
-                coords = (self.pad_size - coords[0] - 1, coords[1])
+        # if random.choice([0, 1]):
+        #     prev_pos = prev_pos[:, ::-1]
+        #     cur_pos = cur_pos[:, ::-1]
+        #     reasonable_segmentation = reasonable_segmentation[:, ::-1]
+        #     local_mask = local_mask[:, ::-1]
+        #     if coords:
+        #         coords = (coords[0], self.pad_size - coords[1] - 1)
+        # if random.choice([0, 1]):
+        #     prev_pos = prev_pos[::-1, :]
+        #     cur_pos = cur_pos[::-1, :]
+        #     reasonable_segmentation = reasonable_segmentation[:, ::-1]
+        #     local_mask = local_mask[::-1, :]
+        #     if coords:
+        #         coords = (self.pad_size - coords[0] - 1, coords[1])
         positions = [prev_pos * color_to_play] * 7
         positions.append(cur_pos * color_to_play)
         positions.append(np.full(self.shape, color_to_play))
@@ -288,22 +292,25 @@ class AnalyzedPosition(GoPosition):
         same_positions = [np.array(cur_pos)] * 8
         same_positions.append(np.zeros(self.shape))
         for counter, i in enumerate(list(available_values)):
-            mask = (self.segmentation == i).astype(np.uint8)
+            mask = (reasonable_segmentation == i).astype(np.uint8)
             local_mask = cv2.dilate(mask, kernel_medium)
+            local_mask = np.logical_and(local_mask, self.board_mask)
             coords, player, _ = self.get_first_local_move(local_mask, node=node.children[0])
 
-            if random.choice([0, 1]):
-                prev_pos = prev_pos[:, ::-1]
-                cur_pos = cur_pos[:, ::-1]
-                local_mask = local_mask[:, ::-1]
-                if coords:
-                    coords = (coords[0], self.pad_size - coords[1] - 1)
-            if random.choice([0, 1]):
-                prev_pos = prev_pos[::-1, :]
-                cur_pos = cur_pos[::-1, :]
-                local_mask = local_mask[::-1, :]
-                if coords:
-                    coords = (self.pad_size - coords[0] - 1, coords[1])
+            # if random.choice([0, 1]):
+            #     prev_pos = prev_pos[:, ::-1]
+            #     cur_pos = cur_pos[:, ::-1]
+            #     reasonable_segmentation = reasonable_segmentation[:, ::-1]
+            #     local_mask = local_mask[:, ::-1]
+            #     if coords:
+            #         coords = (coords[0], self.pad_size - coords[1] - 1)
+            # if random.choice([0, 1]):
+            #     prev_pos = prev_pos[::-1, :]
+            #     cur_pos = cur_pos[::-1, :]
+            #     reasonable_segmentation = reasonable_segmentation[:, ::-1]
+            #     local_mask = local_mask[::-1, :]
+            #     if coords:
+            #         coords = (self.pad_size - coords[0] - 1, coords[1])
 
             to_return.append((local_mask, same_positions, coords, player))
             if counter > 2:

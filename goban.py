@@ -60,7 +60,7 @@ class GoBoard(QWidget):
         self.show_predicted_moves = False
         self.show_actual_move = False
         self.local_mask = None
-        self.load_agent("/home/test/PycharmProjects/a0-jax/trained.ckpt")
+        self.load_agent(os.path.join(os.getcwd(), "trained.ckpt"))
         self.from_pkl = False
 
     def paintEvent(self, event):
