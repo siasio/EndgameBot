@@ -18,7 +18,7 @@ from constants import (
 )
 # from katrain.core.lang import i18n
 from sgf_parser import Move, SGFNode
-from utils import var_to_grid   # evaluation_class, pack_floats, unpack_floats, var_to_grid
+from katrain_utils import var_to_grid   # evaluation_class, pack_floats, unpack_floats, var_to_grid
 
 
 # def analysis_dumps(analysis):

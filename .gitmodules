@@ -1,0 +1,3 @@
+[submodule "a0-jax"]
+	path = a0-jax
+	url = https://github.com/siasio/a0-jax.git

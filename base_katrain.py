@@ -17,7 +17,7 @@ from constants import (
     CONFIG_MIN_VERSION,
     DATA_FOLDER,
 )
-from utils import find_package_resource
+from katrain_utils import find_package_resource
 
 
 class Player:

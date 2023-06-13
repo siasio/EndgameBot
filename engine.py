@@ -23,7 +23,7 @@ from constants import (
 )
 from game_node import GameNode
 from sgf_parser import Move
-from utils import find_package_resource, json_truncate_arrays
+from katrain_utils import find_package_resource, json_truncate_arrays
 
 
 class BaseEngine:  # some common elements between analysis and contribute engine

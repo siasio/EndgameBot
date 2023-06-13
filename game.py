@@ -29,7 +29,7 @@ from typing import Dict, List, Optional, Union
 # )
 # from katrain.core.game_node import GameNode
 from sgf_parser import SGF, Move
-from utils import var_to_grid
+from katrain_utils import var_to_grid
 from game_node import GameNode
 
 
