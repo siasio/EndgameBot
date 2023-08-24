@@ -10,6 +10,7 @@ import os
 from local_pos_masks import AnalyzedPosition
 import pickle
 from policies.resnet_policy import TransferResnet, ResnetPolicyValueNet128
+import numpy as np
 
 # Define the size of the Go board
 BOARD_SIZE = 19
@@ -60,7 +61,7 @@ class GoBoard(QWidget):
         self.show_predicted_moves = False
         self.show_actual_move = False
         self.local_mask = None
-        self.load_agent(os.path.join(os.getcwd(), "trained.ckpt"))
+        self.load_agent(os.path.join(os.getcwd(), 'a0-jax', "trained.ckpt"))
         self.from_pkl = False
 
     def paintEvent(self, event):
@@ -92,6 +93,10 @@ class GoBoard(QWidget):
 
         # Draw the stones and numbers
         font = QFont("Helvetica", self.stone_radius - 4)
+        top_black_move = np.unravel_index(np.argmax(self.a0pos.predicted_black_next_moves, axis=None),
+                                          self.a0pos.predicted_black_next_moves.shape)
+        top_white_move = np.unravel_index(np.argmax(self.a0pos.predicted_white_next_moves, axis=None),
+                                          self.a0pos.predicted_white_next_moves.shape)
         for i in range(self.size_x):
             for j in range(self.size_y):
                 x = self.margin + i * self.stone_radius * 2
@@ -136,10 +141,11 @@ class GoBoard(QWidget):
 
                 move_size = int(self.stone_radius / 2)
                 if self.show_predicted_moves:
-                    threshold = 100
+                    threshold = 100  # What should it be? it was written 100
 
                     black_move_alpha = int(100 * 255 * self.a0pos.predicted_black_next_moves[i][j])
-                    if black_move_alpha > threshold:
+
+                    if black_move_alpha > threshold and top_black_move[0] == i and top_black_move[1] == j:
                         black_color = QColor(0, 0, 0, black_move_alpha)
                         painter.setBrush(QBrush(black_color))
                         painter.setPen(QPen(QColor("black")))
@@ -147,7 +153,7 @@ class GoBoard(QWidget):
 
                     white_move_alpha = int(100 * 255 * self.a0pos.predicted_white_next_moves[i][j])
 
-                    if white_move_alpha > threshold:
+                    if white_move_alpha > threshold and top_white_move[0] == i and top_white_move[1] == j:
                         white_color = QColor(255, 255, 255, white_move_alpha)
                         painter.setBrush(QBrush(white_color))
                         painter.setPen(QPen(QColor("white")))
@@ -261,6 +267,7 @@ class GoBoard(QWidget):
         self.a0pos = AnalyzedPosition.from_gtp_log(gtp_position) if not self.from_pkl else AnalyzedPosition.from_jax(gtp_position)
         self.local_mask = self.a0pos.local_mask if self.a0pos.fixed_mask else None
         self.a0pos.load_agent(self.agent)
+        self.a0pos.analyze_pos(self.local_mask)
         self.size_x, self.size_y = self.a0pos.size_x, self.a0pos.size_y
         self.reset_numbers()
         self.update()

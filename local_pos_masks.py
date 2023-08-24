@@ -8,6 +8,10 @@ import time
 import cv2
 import random
 from scipy.ndimage.measurements import label
+#from train_agent import TrainingOwnershipExample
+import os
+
+#os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = '.79'
 
 BLACK = 1
 WHITE = -1
@@ -49,6 +53,7 @@ artificial_kernels = [
     np.array([[1, 1, 1, 1, 1], [0, 1, 1, 0, 0], [1, 1, 1, 1, 0], [1, 0, 1, 1, 1], [0, 1, 1, 0, 0]], dtype=np.uint8),
     np.array([[0, 1, 1, 1, 1], [1, 1, 1, 0, 0], [1, 0, 1, 0, 0], [1, 1, 1, 1, 0], [0, 0, 0, 1, 0]], dtype=np.uint8),
 ]
+
 
 class GoPosition:
     def __init__(self, size=19):
@@ -92,14 +97,15 @@ class AnalyzedPosition(GoPosition):
         self.local_mask = None
 
     @classmethod
-    def from_jax(cls, jax_data):
+    def from_jax(cls, jax_data):  # TrainingOwnershipExample):
         obj = cls()
         obj.fixed_mask = True
-        obj.stones = np.array(jax_data.state[..., 0])
+        obj.stones = np.array(jax_data.state[..., 7])
         obj.ownership = np.array(jax_data.value.reshape(obj.shape))
         obj.local_mask = np.array(jax_data.mask)
         obj.board_mask = np.array(jax_data.board_mask)
-        next_move = np.array(jax_data.move)
+        # next_move = np.array(jax_data.move)
+        """
         if sum(next_move[:obj.num_intersections]) > 0:
             color = 1
         elif sum(next_move[obj.num_intersections: 2 * obj.num_intersections]) > 0:
@@ -107,6 +113,7 @@ class AnalyzedPosition(GoPosition):
         else:
             intersection = None
             color = 0
+        
         if sum(next_move[:2 * obj.num_intersections]) > 0:
             move_mask = (next_move[:obj.num_intersections] + next_move[
                                                              obj.num_intersections: 2 * obj.num_intersections]).reshape(
@@ -114,7 +121,8 @@ class AnalyzedPosition(GoPosition):
             x = move_mask.argmax(axis=0).sum()
             y = move_mask.argmax(axis=1).sum()
             intersection = (x, y)
-        obj.next_move = intersection, color, None
+        """
+        obj.next_move = tuple(np.array(jax_data.next_move_coords)), np.array(jax_data.next_move_color), None
 
         return obj
 
@@ -287,7 +295,9 @@ class AnalyzedPosition(GoPosition):
         positions = [prev_pos * color_to_play] * 7
         positions.append(cur_pos * color_to_play)
         positions.append(np.full(self.shape, color_to_play))
-        to_return.append((local_mask, positions, coords, player))
+        if player is not None:
+            player = player * color_to_play
+        to_return.append((local_mask, positions, coords, player, self.continous_ownership * color_to_play))
 
         same_positions = [np.array(cur_pos)] * 8
         same_positions.append(np.zeros(self.shape))
@@ -312,7 +322,7 @@ class AnalyzedPosition(GoPosition):
             #     if coords:
             #         coords = (self.pad_size - coords[0] - 1, coords[1])
 
-            to_return.append((local_mask, same_positions, coords, player))
+            to_return.append((local_mask, same_positions, coords, player, self.continous_ownership))
             if counter > 2:
                 break
         return to_return
