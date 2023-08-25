@@ -141,7 +141,7 @@ class GoBoard(QWidget):
 
                 move_size = int(self.stone_radius / 2)
                 if self.show_predicted_moves:
-                    threshold = 100  # What should it be? it was written 100
+                    threshold = 0  # What should it be? it was written 100
 
                     black_move_alpha = int(100 * 255 * self.a0pos.predicted_black_next_moves[i][j])
 
