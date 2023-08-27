@@ -3,7 +3,7 @@ from PyQt5 import QtGui
 from PyQt5.QtCore import Qt, QPoint, QRectF, QPointF, QSettings
 from PyQt5.QtGui import QColor, QPainter, QPen, QBrush, QFont, QPalette, QKeySequence, QPolygonF
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QLabel, QHBoxLayout, QAction, QShortcut, QVBoxLayout, \
-    QPushButton, QFileDialog, QCheckBox
+    QPushButton, QFileDialog, QCheckBox, QRadioButton, QButtonGroup
 from sgf_parser import Move
 import json
 import os
@@ -59,6 +59,8 @@ class GoBoard(QWidget):
         self.show_ownership = False
         self.show_predicted_ownership = False
         self.show_predicted_moves = False
+        self.show_black_scores = False
+        self.show_white_scores = False
         self.show_actual_move = False
         self.local_mask = None
         self.load_agent(os.path.join(os.getcwd(), 'a0-jax', "trained.ckpt"))
@@ -67,6 +69,21 @@ class GoBoard(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
+
+        def draw_text(x_coord, y_coord, text_to_draw):
+            rect = painter.fontMetrics().boundingRect(text_to_draw)
+            cx = x_coord - rect.width() / 2
+            cy = y_coord + font.pointSizeF() / 2
+            painter.drawText(QPointF(cx, cy), text_to_draw)
+
+        def should_show_percentage(i_coord, j_coord):
+            return not self.ownership_only_for_mask or (self.local_mask is not None and self.local_mask[i_coord][j_coord])
+
+        def should_show_score(i_coord, j_coord):
+            return not self.scores_only_for_mask or (self.local_mask is not None and self.local_mask[i_coord][j_coord])
+
+        def ownership_to_rgb(ownership):
+            return int(255 * (1 - (ownership + 1) / 2))
 
         # Draw the board background with margins
         board_size_x = (self.size_x - 1) * self.stone_radius * 2 + self.margin * 2
@@ -93,20 +110,27 @@ class GoBoard(QWidget):
 
         # Draw the stones and numbers
         font = QFont("Helvetica", self.stone_radius - 4)
+        painter.setFont(font)
         top_black_move = np.unravel_index(np.argmax(self.a0pos.predicted_black_next_moves, axis=None),
                                           self.a0pos.predicted_black_next_moves.shape)
         top_white_move = np.unravel_index(np.argmax(self.a0pos.predicted_white_next_moves, axis=None),
                                           self.a0pos.predicted_white_next_moves.shape)
+        # print(self.ownership_choice)
+        # print(self.move_choice)
         for i in range(self.size_x):
             for j in range(self.size_y):
                 x = self.margin + i * self.stone_radius * 2
                 y = self.margin + j * self.stone_radius * 2
-                if self.a0pos.stones[i][j]:
-                    color = QColor("black" if self.a0pos.stones[i][j] == BLACK else "white")
 
-                    pen = QPen(QColor("white"), self.w_border, Qt.SolidLine) if self.a0pos.stones[i][j] == BLACK else QPen(
+                if self.a0pos.stones[i][j]:
+                    # Pen is for the border of the stone so the color should be swapped.
+                    pen = QPen(QColor("white"), self.w_border, Qt.SolidLine) if self.a0pos.stones[i][
+                                                                                    j] == BLACK else QPen(
                         QColor("black"), self.b_border, Qt.SolidLine)
                     painter.setPen(pen)
+
+                    color = QColor("black" if self.a0pos.stones[i][j] == BLACK else "white")
+
                     painter.setBrush(QBrush(color))
                     radius_to_use = self.stone_radius * self.b_radius if self.a0pos.stones[i][
                                                                              j] == BLACK else self.stone_radius * self.w_radius
@@ -114,50 +138,66 @@ class GoBoard(QWidget):
 
                     corresponding_number = self.stone_numbers[i][j]
                     if corresponding_number:
-                        painter.setFont(font)
                         painter.setPen(QColor("white" if self.a0pos.stones[i][j] == BLACK else "black"))
-                        text = str(corresponding_number)
-                        rect = painter.fontMetrics().boundingRect(text)
-                        cx = x - rect.width() / 2
-                        cy = y + font.pointSizeF() / 2
-                        painter.drawText(QPointF(cx, cy), text)
+                        draw_text(x, y, str(corresponding_number))
 
-                if self.show_ownership and self.a0pos.ownership[i][j]:
-                    rgb = int(255 * (1 - (self.a0pos.ownership[i][j] + 1) / 2))
-                    color = QColor(rgb, rgb, rgb, 127)
+                if self.a0pos.last_move is not None:
+                    if i == self.a0pos.last_move[0] and j == self.a0pos.last_move[1]:
+                        #
+                        # pen = QPen(QColor("white"), self.w_border, Qt.SolidLine) if self.a0pos.stones[i][
+                        #                                                                 j] == BLACK else QPen(
+                        #     QColor("black"), self.b_border, Qt.SolidLine)
+                        # painter.setPen(pen)
+                        painter.setBrush(QBrush(QColor("red")))
+                        radius_to_use = self.stone_radius * self.b_radius * 0.3
+                        painter.drawEllipse(QPoint(x, y), radius_to_use, radius_to_use)
 
-                    painter.setBrush(QBrush(color))
+                if self.show_gt_ownership and self.a0pos.ownership[i][j]:
+                    rgb = ownership_to_rgb(self.a0pos.ownership[i][j])
+                    painter.setBrush(QBrush(QColor(rgb, rgb, rgb, 127)))
                     painter.setPen(Qt.NoPen)
                     painter.drawRect(x, y, int(self.stone_radius), int(self.stone_radius))
 
-                if self.show_predicted_ownership and self.local_mask is not None:
-                    if self.local_mask[i][j]:
-                        rgb = int(255 * (1 - (self.a0pos.predicted_ownership[i][j] + 1) / 2))
-                        color = QColor(rgb, rgb, rgb, 127)
-                        painter.setBrush(QBrush(color))
-                        painter.setPen(QPen(color, 0, Qt.SolidLine))
-                        painter.drawRect(x - int(self.stone_radius // 2), y - int(int(self.stone_radius) // 2),
-                                         int(self.stone_radius), int(self.stone_radius))
+                if self.ownership_choice == "show_with_color" and should_show_percentage(i, j):
+                    rgb = ownership_to_rgb(self.a0pos.predicted_ownership[i][j])
+                    painter.setBrush(QBrush(QColor(rgb, rgb, rgb, 127)))
+                    painter.setPen(Qt.NoPen)
+                    painter.drawRect(x - int(self.stone_radius // 2), y - int(int(self.stone_radius) // 2),
+                                     int(self.stone_radius), int(self.stone_radius))
+                elif self.ownership_choice == "show_as_percentages" and should_show_percentage(i, j):
+                    painter.setPen(QColor("white" if self.a0pos.stones[i][j] == BLACK else "black"))
+                    percentage = int(50 * (self.a0pos.predicted_ownership[i][j] + 1))
+                    draw_text(x, y, str(percentage))
 
                 move_size = int(self.stone_radius / 2)
-                if self.show_predicted_moves:
-                    threshold = 0  # What should it be? it was written 100
+                if self.move_choice == "show_top_b_w":
+                    threshold = 3 * 100 * 255  # What should it be? it was written 100
 
                     black_move_alpha = int(100 * 255 * self.a0pos.predicted_black_next_moves[i][j])
 
                     if black_move_alpha > threshold and top_black_move[0] == i and top_black_move[1] == j:
-                        black_color = QColor(0, 0, 0, black_move_alpha)
-                        painter.setBrush(QBrush(black_color))
+                        # print("Top black move:", top_black_move, self.a0pos.predicted_black_next_moves[i][j])
+                        painter.setBrush(QBrush(QColor(0, 0, 0, black_move_alpha)))
                         painter.setPen(QPen(QColor("black")))
                         painter.drawPolygon(self.get_cross(move_size, x, y))
 
                     white_move_alpha = int(100 * 255 * self.a0pos.predicted_white_next_moves[i][j])
 
                     if white_move_alpha > threshold and top_white_move[0] == i and top_white_move[1] == j:
-                        white_color = QColor(255, 255, 255, white_move_alpha)
-                        painter.setBrush(QBrush(white_color))
+                        # print("Top white move:", top_white_move, self.a0pos.predicted_white_next_moves[i][j])
+                        painter.setBrush(QBrush(QColor(255, 255, 255, white_move_alpha)))
                         painter.setPen(QPen(QColor("white")))
                         painter.drawEllipse(x - move_size, y - move_size, 2 * move_size, 2 * move_size)
+
+                elif self.move_choice == "black_scores" and should_show_score(i, j):
+                    painter.setPen(QColor("white" if self.a0pos.stones[i][j] == BLACK else "black"))
+                    num = int(0.75 * self.a0pos.predicted_black_next_moves[i][j])
+                    draw_text(x, y, str(num))
+
+                elif self.move_choice == "white_scores" and should_show_score(i, j):
+                    painter.setPen(QColor("white" if self.a0pos.stones[i][j] == BLACK else "black"))
+                    num = int(0.75 * self.a0pos.predicted_white_next_moves[i][j])
+                    draw_text(x, y, str(num))
 
                 if self.show_actual_move and self.local_mask is not None:
                     coords, color, _ = self.a0pos.get_first_local_move(self.local_mask)
@@ -169,19 +209,19 @@ class GoBoard(QWidget):
                         else:
                             painter.drawEllipse(x - move_size, y - move_size, 2 * move_size, 2 * move_size)
 
-                if self.show_segmentation:
-                    color = colors[int(self.a0pos.segmentation[i][j])]
-                    painter.setBrush(QBrush(color))
-                    painter.setPen(QPen(color, 0, Qt.SolidLine))
-                    painter.drawRect(x - int(self.stone_radius), y - int(self.stone_radius),
-                                     2 * int(self.stone_radius), 2 * int(self.stone_radius))
+                # if self.show_segmentation:
+                #     color = colors[int(self.a0pos.segmentation[i][j])]
+                #     painter.setBrush(QBrush(color))
+                #     painter.setPen(QPen(color, 0, Qt.SolidLine))
+                #     painter.drawRect(x - int(self.stone_radius), y - int(self.stone_radius),
+                #                      2 * int(self.stone_radius), 2 * int(self.stone_radius))
                     #* self.b_radius if self.a0pos.stones[i][
                     #                      j] == BLACK else self.stone_radius * self.w_radius
                 if self.local_mask is not None:
                     if not self.local_mask[i][j]:
-                        color = QColor(255, 255, 255, 196)
+                        color = QColor(255, 255, 255, 127)
                         painter.setBrush(QBrush(color))
-                        painter.setPen(QPen(color, 0, Qt.SolidLine))
+                        painter.setPen(Qt.NoPen)  # QPen(color, 0, Qt.SolidLine))
                         painter.drawRect(x - int(self.stone_radius), y - int(self.stone_radius),
                                          2 * int(self.stone_radius), 2 * int(self.stone_radius))
         painter.end()
@@ -305,36 +345,37 @@ class MainWindow(QMainWindow):
         # main_layout.addWidget(picture_widget)
         # main_layout.addWidget(self.go_board)
 
+        self.move_buttons = QButtonGroup()
+        self.move_buttons.setProperty("name", "move choice")
+        self.ownership_buttons = QButtonGroup()
+        self.ownership_buttons.setProperty("name", "ownership choice")
+
         self.select_dir_button = QPushButton("Select Directory", self)
         # self.select_dir_button.setGeometry(10, 440, 120, 30)
         self.select_dir_button.clicked.connect(self.select_directory)
         self.select_dir_button.setStyleSheet("QPushButton {"
                                              "background-color: #D3D3D3;}")
 
-        self.ownership_button = QCheckBox("Show ownership", self)
-        self.ownership_button.stateChanged.connect(self.show_ownership)
-        self.ownership_button.setStyleSheet("QCheckBox {"
-                                            "background-color: #D3D3D3;}")
+        buttons_layout = QVBoxLayout()
+        buttons_layout.addWidget(self.select_dir_button)
+        buttons_layout.addStretch()
 
-        self.segmentation_button = QCheckBox("Show segmentation", self)
-        self.segmentation_button.stateChanged.connect(self.show_segmentation)
-        self.segmentation_button.setStyleSheet("QCheckBox {"
-                                               "background-color: #D3D3D3;}")
+        buttons_layout.addWidget(QLabel("Ownership:"))
+        self.predicted_own_button = self.create_radio_button("Show with color", buttons_layout, self.ownership_buttons)
+        self.own_numbers_button = self.create_radio_button("Show as percentages", buttons_layout, self.ownership_buttons)
 
-        self.predicted_own_button = QCheckBox("Show predicted ownership", self)
-        self.predicted_own_button.stateChanged.connect(self.show_predicted_own)
-        self.predicted_own_button.setStyleSheet("QCheckBox {"
-                                               "background-color: #D3D3D3;}")
+        self.masked_ownership_cb = self.create_checkbox("Ownership only for mask", buttons_layout)
+        self.ownership_button = self.create_checkbox("Show GT ownership", buttons_layout)
 
-        self.predicted_moves_button = QCheckBox("Show predicted moves", self)
-        self.predicted_moves_button.stateChanged.connect(self.show_predicted_moves)
-        self.predicted_moves_button.setStyleSheet("QCheckBox {"
-                                               "background-color: #D3D3D3;}")
+        # buttons_layout.addStretch()
 
-        self.actual_move_button = QCheckBox("Show actual move", self)
-        self.actual_move_button.stateChanged.connect(self.show_actual_move)
-        self.actual_move_button.setStyleSheet("QCheckBox {"
-                                               "background-color: #D3D3D3;}")
+        buttons_layout.addWidget((QLabel("Next move:")))
+        self.predicted_moves_button = self.create_radio_button("Show top B W", buttons_layout, self.move_buttons)
+        self.black_predictions_button = self.create_radio_button("Black scores", buttons_layout, self.move_buttons)
+        self.white_predictions_button = self.create_radio_button("White scores", buttons_layout, self.move_buttons)
+
+        self.masked_predictions_cb = self.create_checkbox("Scores only for mask", buttons_layout)
+        self.actual_move_button = self.create_checkbox("Show actual move", buttons_layout)
 
         self.previous_button = QPushButton("Previous position", self)
         # self.good_button.setGeometry(240, 440, 120, 120)
@@ -364,14 +405,6 @@ class MainWindow(QMainWindow):
         navigation_layout.addStretch()
         navigation_layout.addWidget(self.next_button)
 
-        buttons_layout = QVBoxLayout()
-        buttons_layout.addWidget(self.select_dir_button)
-        buttons_layout.addStretch()
-        buttons_layout.addWidget(self.ownership_button)
-        buttons_layout.addWidget(self.segmentation_button)
-        buttons_layout.addWidget(self.predicted_own_button)
-        buttons_layout.addWidget(self.predicted_moves_button)
-        buttons_layout.addWidget(self.actual_move_button)
         buttons_layout.addStretch()
         self.label = QLabel("B + ?")
         self.label.setStyleSheet("QLabel {"
@@ -406,6 +439,33 @@ class MainWindow(QMainWindow):
         shortcut = QShortcut(QKeySequence(Qt.Key_F12), self)
         shortcut.activated.connect(self.toggleFullScreen)
 
+    def create_checkbox(self, text, button_layout, radio_button=False, radio_button_group: QButtonGroup = None, default_value=False):
+        setting_name = text.lower().replace(" ", "_")
+        setattr(self.go_board, setting_name, default_value)  # Initialize setting with default value
+
+        new_widget = QCheckBox(text, self)
+        new_widget.stateChanged.connect(lambda state: self.update_setting(setting_name, state))
+        new_widget.setStyleSheet("QCheckBox { background-color: #D3D3D3; }")
+        button_layout.addWidget(new_widget)
+        return new_widget
+
+    def create_radio_button(self, text, button_layout, radio_button_group: QButtonGroup):
+        setting_name = text.lower().replace(" ", "_")
+        group_name = radio_button_group.property("name").lower().replace(" ", "_")
+        setattr(self.go_board, group_name, "")  # Initialize setting with default value
+        new_widget = QRadioButton(text, self)
+        if radio_button_group is not None:
+            radio_button_group.addButton(new_widget)
+        # The lambda expression is called only for state == True:
+        new_widget.clicked.connect(lambda state: self.update_setting(group_name, setting_name))
+        new_widget.setStyleSheet("QRadioButton { background-color: #D3D3D3; }")
+        button_layout.addWidget(new_widget)
+        return new_widget
+
+    def update_setting(self, setting_name, state):
+        setattr(self.go_board, setting_name, state)
+        self.go_board.update()
+
     def show_segmentation(self):
         self.go_board.show_segmentation = not self.go_board.show_segmentation
         self.go_board.update()
@@ -420,6 +480,14 @@ class MainWindow(QMainWindow):
 
     def show_predicted_moves(self):
         self.go_board.show_predicted_moves = not self.go_board.show_predicted_moves
+        self.go_board.update()
+
+    def show_black_scores(self):
+        self.go_board.show_black_scores = not self.go_board.show_black_scores
+        self.go_board.update()
+
+    def show_white_scores(self):
+        self.go_board.show_white_scores = not self.go_board.show_white_scores
         self.go_board.update()
 
     def show_actual_move(self):

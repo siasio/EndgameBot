@@ -95,12 +95,14 @@ class AnalyzedPosition(GoPosition):
         self.fixed_mask = False
         self.next_move = None
         self.local_mask = None
+        self.stacked_pos = None
 
     @classmethod
     def from_jax(cls, jax_data):  # TrainingOwnershipExample):
         obj = cls()
         obj.fixed_mask = True
         obj.stones = np.array(jax_data.state[..., 7])
+        obj.stacked_pos = jax_data.state
         obj.ownership = np.array(jax_data.value.reshape(obj.shape))
         obj.local_mask = np.array(jax_data.mask)
         obj.board_mask = np.array(jax_data.board_mask)
@@ -148,6 +150,21 @@ class AnalyzedPosition(GoPosition):
         obj.board_segmentation()
         return obj
 
+    @property
+    def last_move(self):
+        if self.stacked_pos is None:
+            return None
+        if -1 < jnp.sum(self.stacked_pos[..., -1]) < 1:
+            # The last channel in stacked_pos is an indicator of what is last move's color
+            # If it's filled with zeros, it means that no information about the last move is included
+            return None
+        new_stones = self.stacked_pos[..., 7] ** 2 - self.stacked_pos[..., 6] ** 2
+
+        # if not 0 < jnp.sum(new_stones) < 2:
+        #     print(f"Strange new moves in position. It seems that there are {sum(new_stones)} new moves.")
+
+        return np.unravel_index(np.argmax(new_stones, axis=None), new_stones.shape)
+
     @staticmethod
     def gtp_data_parse(gtp_data):
         try:
@@ -169,16 +186,15 @@ class AnalyzedPosition(GoPosition):
         self.agent = agent
 
     def analyze_pos(self, mask):
-        state = jnp.array(self.stones)
-        state = stack_last_state(state)
+        state = self.stacked_pos if self.stacked_pos is not None else stack_last_state(jnp.array(self.stones))
         board_mask = jnp.array(self.board_mask)
         mask = jnp.array(mask)
         action_logits, ownership_map = self.agent((state, mask, board_mask), batched=False)
-        self.predicted_ownership = np.array(ownership_map)  # .reshape(self.shape)
-        action_logits = jax.nn.softmax(action_logits, axis=-1)
-        self.predicted_black_next_moves = np.array(action_logits[..., 0])  # :self.num_intersections]).reshape(self.shape)
+        self.predicted_ownership = jnp.array(ownership_map)  # .reshape(self.shape)
+        #action_logits = jax.nn.softmax(action_logits, axis=-1)
+        self.predicted_black_next_moves = np.array(action_logits[..., 1])  # :self.num_intersections]).reshape(self.shape)
         self.predicted_white_next_moves = np.array(
-            action_logits[..., 1])  # [self.num_intersections:2 * self.num_intersections]).reshape(self.shape)
+            action_logits[..., 0])  # [self.num_intersections:2 * self.num_intersections]).reshape(self.shape)
 
     def stones_from_gtp(self, stones):
         for color in 'BW':
