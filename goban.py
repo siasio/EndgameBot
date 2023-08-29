@@ -339,7 +339,6 @@ class MainWindow(QMainWindow):
         # create the widgets
         self.go_board = GoBoard(self, size=int(BOARD_SIZE), stone_radius=int(intersection_size), margin=int(margin_size))
         # picture_widget = QLabel()  # replace this with your own widget
-
         # create a layout and add the widgets to it
         # main_layout = QHBoxLayout()
         # main_layout.addWidget(picture_widget)
@@ -351,7 +350,6 @@ class MainWindow(QMainWindow):
         self.ownership_buttons.setProperty("name", "ownership choice")
 
         self.select_dir_button = QPushButton("Select Directory", self)
-        # self.select_dir_button.setGeometry(10, 440, 120, 30)
         self.select_dir_button.clicked.connect(self.select_directory)
         self.select_dir_button.setStyleSheet("QPushButton {"
                                              "background-color: #D3D3D3;}")
@@ -367,8 +365,6 @@ class MainWindow(QMainWindow):
         self.masked_ownership_cb = self.create_checkbox("Ownership only for mask", buttons_layout)
         self.ownership_button = self.create_checkbox("Show GT ownership", buttons_layout)
 
-        # buttons_layout.addStretch()
-
         buttons_layout.addWidget((QLabel("Next move:")))
         self.predicted_moves_button = self.create_radio_button("Show top B W", buttons_layout, self.move_buttons)
         self.black_predictions_button = self.create_radio_button("Black scores", buttons_layout, self.move_buttons)
@@ -378,7 +374,6 @@ class MainWindow(QMainWindow):
         self.actual_move_button = self.create_checkbox("Show actual move", buttons_layout)
 
         self.previous_button = QPushButton("Previous position", self)
-        # self.good_button.setGeometry(240, 440, 120, 120)
         self.previous_button.clicked.connect(self.show_previous_position)
         self.previous_button.setStyleSheet("QPushButton {"
                                            "font-size: 24px;"
@@ -388,7 +383,6 @@ class MainWindow(QMainWindow):
                                            "}")
 
         self.next_button = QPushButton("Next position", self)
-        # self.bad_button.setGeometry(520, 440, 120, 120)
         self.next_button.clicked.connect(self.show_next_position)
         self.next_button.setStyleSheet("QPushButton {"
                                        "font-size: 24px;"
@@ -397,8 +391,6 @@ class MainWindow(QMainWindow):
                                        "background-color: #D3D3D3;"
                                        "}")
 
-        # video_layout = QVBoxLayout()
-        # video_layout.addWidget(self.video_label)
 
         navigation_layout = QHBoxLayout()
         navigation_layout.addWidget(self.previous_button)
@@ -466,34 +458,6 @@ class MainWindow(QMainWindow):
         setattr(self.go_board, setting_name, state)
         self.go_board.update()
 
-    def show_segmentation(self):
-        self.go_board.show_segmentation = not self.go_board.show_segmentation
-        self.go_board.update()
-
-    def show_ownership(self):
-        self.go_board.show_ownership = not self.go_board.show_ownership
-        self.go_board.update()
-
-    def show_predicted_own(self):
-        self.go_board.show_predicted_ownership = not self.go_board.show_predicted_ownership
-        self.go_board.update()
-
-    def show_predicted_moves(self):
-        self.go_board.show_predicted_moves = not self.go_board.show_predicted_moves
-        self.go_board.update()
-
-    def show_black_scores(self):
-        self.go_board.show_black_scores = not self.go_board.show_black_scores
-        self.go_board.update()
-
-    def show_white_scores(self):
-        self.go_board.show_white_scores = not self.go_board.show_white_scores
-        self.go_board.update()
-
-    def show_actual_move(self):
-        self.go_board.show_actual_move = not self.go_board.show_actual_move
-        self.go_board.update()
-
     def show_previous_position(self):
         if self.current_position_index > 0:
             self.current_position_index -= 1
@@ -532,8 +496,6 @@ class MainWindow(QMainWindow):
             settings.setValue("last_directory", selected_directory)
             # self.update_pinned_directories(selected_directory)
 
-            # self.video_files = sorted([f for f in os.listdir(self.video_dir) if f.endswith('.mp4')])
-            # self.show_next_video()
 
     def visualize_position(self):
         current_position = self.positions[self.current_position_index]
