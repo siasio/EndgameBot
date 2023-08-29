@@ -191,10 +191,16 @@ class AnalyzedPosition(GoPosition):
         mask = jnp.array(mask)
         action_logits, ownership_map = self.agent((state, mask, board_mask), batched=False)
         self.predicted_ownership = jnp.array(ownership_map)  # .reshape(self.shape)
-        #action_logits = jax.nn.softmax(action_logits, axis=-1)
-        self.predicted_black_next_moves = np.array(action_logits[..., 1])  # :self.num_intersections]).reshape(self.shape)
-        self.predicted_white_next_moves = np.array(
-            action_logits[..., 0])  # [self.num_intersections:2 * self.num_intersections]).reshape(self.shape)
+        if action_logits.shape[-1] == 2:
+            self.predicted_black_next_moves = np.array(action_logits[..., 1])
+            self.predicted_white_next_moves = np.array(action_logits[..., 0])
+        else:
+            action_logits = jax.nn.softmax(action_logits, axis=-1)
+            self.predicted_black_next_moves = np.array(action_logits[self.num_intersections:2 * self.num_intersections]).reshape(self.shape)
+            self.predicted_white_next_moves = np.array(action_logits[:self.num_intersections]).reshape(self.shape)
+            self.black_move_prob = np.sum(self.predicted_black_next_moves)
+            self.white_move_prob = np.sum(self.predicted_white_next_moves)
+            self.no_move_prob = action_logits[-1].astype(float)
 
     def stones_from_gtp(self, stones):
         for color in 'BW':

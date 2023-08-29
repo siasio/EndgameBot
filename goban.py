@@ -191,12 +191,12 @@ class GoBoard(QWidget):
 
                 elif self.move_choice == "black_scores" and should_show_score(i, j):
                     painter.setPen(QColor("white" if self.a0pos.stones[i][j] == BLACK else "black"))
-                    num = int(0.75 * self.a0pos.predicted_black_next_moves[i][j])
+                    num = int(100 * self.a0pos.predicted_black_next_moves[i][j])
                     draw_text(x, y, str(num))
 
                 elif self.move_choice == "white_scores" and should_show_score(i, j):
                     painter.setPen(QColor("white" if self.a0pos.stones[i][j] == BLACK else "black"))
-                    num = int(0.75 * self.a0pos.predicted_white_next_moves[i][j])
+                    num = int(100 * self.a0pos.predicted_white_next_moves[i][j])
                     draw_text(x, y, str(num))
 
                 if self.show_actual_move and self.local_mask is not None:
@@ -373,6 +373,31 @@ class MainWindow(QMainWindow):
         self.masked_predictions_cb = self.create_checkbox("Scores only for mask", buttons_layout)
         self.actual_move_button = self.create_checkbox("Show actual move", buttons_layout)
 
+        self.black_prob_label = QLabel("Black move prob:")
+        self.black_prob_label.setStyleSheet("QLabel {"
+                                 "font-size: 24px;"
+                                 "padding: 20px;"
+                                 "border-radius: 60px;"
+                                 "background-color: #D3D3D3;"
+                                 "}")
+        self.white_prob_label = QLabel("White move prob:")
+        self.white_prob_label.setStyleSheet("QLabel {"
+                                 "font-size: 24px;"
+                                 "padding: 20px;"
+                                 "border-radius: 60px;"
+                                 "background-color: #D3D3D3;"
+                                 "}")
+        self.no_move_prob_label = QLabel("No move prob:")
+        self.no_move_prob_label.setStyleSheet("QLabel {"
+                                 "font-size: 24px;"
+                                 "padding: 20px;"
+                                 "border-radius: 60px;"
+                                 "background-color: #D3D3D3;"
+                                 "}")
+        buttons_layout.addWidget(self.black_prob_label)
+        buttons_layout.addWidget(self.white_prob_label)
+        buttons_layout.addWidget(self.no_move_prob_label)
+
         self.previous_button = QPushButton("Previous position", self)
         self.previous_button.clicked.connect(self.show_previous_position)
         self.previous_button.setStyleSheet("QPushButton {"
@@ -390,7 +415,6 @@ class MainWindow(QMainWindow):
                                        "border-radius: 60px;"
                                        "background-color: #D3D3D3;"
                                        "}")
-
 
         navigation_layout = QHBoxLayout()
         navigation_layout.addWidget(self.previous_button)
@@ -496,6 +520,17 @@ class MainWindow(QMainWindow):
             settings.setValue("last_directory", selected_directory)
             # self.update_pinned_directories(selected_directory)
 
+    def update_buttons(self):
+        w_res = self.go_board.a0pos.w_score
+        b_res = self.go_board.a0pos.b_score
+        diff = b_res - w_res
+        self.label.setText(f'Difference {abs(diff):.2f}')
+        black_move_prob = self.go_board.a0pos.black_move_prob
+        white_move_prob = self.go_board.a0pos.white_move_prob
+        no_move_prob = self.go_board.a0pos.no_move_prob
+        self.black_prob_label.setText(f"Black move prob: {black_move_prob:.2f}")
+        self.white_prob_label.setText(f"White move prob: {white_move_prob:.2f}")
+        self.no_move_prob_label.setText(f"No move prob: {no_move_prob:.2f}")
 
     def visualize_position(self):
         current_position = self.positions[self.current_position_index]
@@ -503,10 +538,7 @@ class MainWindow(QMainWindow):
             current_position = json.loads(current_position)
 
         self.go_board.visualize_position(current_position)
-        w_res = self.go_board.a0pos.w_score
-        b_res = self.go_board.a0pos.b_score
-        diff = b_res - w_res
-        self.label.setText(f'Difference {abs(diff):.2f}')
+        self.update_buttons()
 
     def toggleFullScreen(self):
         if self.windowState() & Qt.WindowFullScreen:
