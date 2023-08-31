@@ -85,6 +85,9 @@ class AnalyzedPosition(GoPosition):
 
         self.board_mask = np.array([[0 for y in range(self.pad_size)]
                                     for x in range(self.pad_size)])
+
+        self.stones = np.array([[0 for y in range(self.pad_size)]
+                                    for x in range(self.pad_size)])
         self.agent = None
 
         self.b_score: float = 0.0
@@ -95,7 +98,7 @@ class AnalyzedPosition(GoPosition):
         self.fixed_mask = False
         self.next_move = None
         self.local_mask = None
-        self.stacked_pos = None
+        self.stacked_pos = stack_last_state(jnp.array(self.stones))
 
     @classmethod
     def from_jax(cls, jax_data):  # TrainingOwnershipExample):
@@ -185,11 +188,14 @@ class AnalyzedPosition(GoPosition):
     def load_agent(self, agent):
         self.agent = agent
 
-    def analyze_pos(self, mask):
-        state = self.stacked_pos if self.stacked_pos is not None else stack_last_state(jnp.array(self.stones))
+    def analyze_pos(self, mask, agent=None):
+        if agent is None:
+            agent = self.agent
+        state = self.stacked_pos
+        color = self.stacked_pos[0, 0, -1]
         board_mask = jnp.array(self.board_mask)
         mask = jnp.array(mask)
-        action_logits, ownership_map = self.agent((state, mask, board_mask), batched=False)
+        action_logits, ownership_map = agent((state, mask, board_mask), batched=False)
         self.predicted_ownership = jnp.array(ownership_map)  # .reshape(self.shape)
         if action_logits.shape[-1] == 2:
             self.predicted_black_next_moves = np.array(action_logits[..., 1])
@@ -207,6 +213,7 @@ class AnalyzedPosition(GoPosition):
             for coords in stones[color]:
                 stone = Move.from_gtp(coords, color)
                 self.stones[stone.coords[0]][stone.coords[1]] = BLACK if stone.player == 'B' else WHITE
+        self.stacked_pos = stack_last_state(jnp.array(self.stones))
 
     def moves_from_gtp(self, moves):
         for move in moves:
@@ -300,20 +307,6 @@ class AnalyzedPosition(GoPosition):
 
         coords, player, _ = self.get_first_local_move(local_mask, node=node.children[0])
 
-        # if random.choice([0, 1]):
-        #     prev_pos = prev_pos[:, ::-1]
-        #     cur_pos = cur_pos[:, ::-1]
-        #     reasonable_segmentation = reasonable_segmentation[:, ::-1]
-        #     local_mask = local_mask[:, ::-1]
-        #     if coords:
-        #         coords = (coords[0], self.pad_size - coords[1] - 1)
-        # if random.choice([0, 1]):
-        #     prev_pos = prev_pos[::-1, :]
-        #     cur_pos = cur_pos[::-1, :]
-        #     reasonable_segmentation = reasonable_segmentation[:, ::-1]
-        #     local_mask = local_mask[::-1, :]
-        #     if coords:
-        #         coords = (self.pad_size - coords[0] - 1, coords[1])
         positions = [prev_pos * color_to_play] * 7
         positions.append(cur_pos * color_to_play)
         positions.append(np.full(self.shape, color_to_play))

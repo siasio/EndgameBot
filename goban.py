@@ -3,7 +3,7 @@ from PyQt5 import QtGui
 from PyQt5.QtCore import Qt, QPoint, QRectF, QPointF, QSettings
 from PyQt5.QtGui import QColor, QPainter, QPen, QBrush, QFont, QPalette, QKeySequence, QPolygonF
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QLabel, QHBoxLayout, QAction, QShortcut, QVBoxLayout, \
-    QPushButton, QFileDialog, QCheckBox, QRadioButton, QButtonGroup
+    QPushButton, QFileDialog, QCheckBox, QRadioButton, QButtonGroup, QToolButton, QFrame
 from sgf_parser import Move
 import json
 import os
@@ -11,6 +11,8 @@ from local_pos_masks import AnalyzedPosition
 import pickle
 from policies.resnet_policy import TransferResnet, ResnetPolicyValueNet128
 import numpy as np
+
+from build_tree import PositionTree, LocalPositionNode
 
 # Define the size of the Go board
 BOARD_SIZE = 19
@@ -53,7 +55,7 @@ class GoBoard(QWidget):
                             (self.size_y - 1) * self.stone_radius * 2 + self.margin * 2)
 
         self.last_color = WHITE
-        self.a0pos = AnalyzedPosition()
+        self.position_tree = PositionTree.from_a0pos(AnalyzedPosition())
         self.reset_numbers()
         self.show_segmentation = False
         self.show_ownership = False
@@ -62,9 +64,14 @@ class GoBoard(QWidget):
         self.show_black_scores = False
         self.show_white_scores = False
         self.show_actual_move = False
-        self.local_mask = None
-        self.load_agent(os.path.join(os.getcwd(), 'a0-jax', "trained.ckpt"))
+        self.local_mask = [[1 for y in range(self.a0pos.pad_size)]
+                           for x in range(self.a0pos.pad_size)]
+        self.agent = self.load_agent(os.path.join(os.getcwd(), 'a0-jax', "trained.ckpt"))
+        self.a0pos.load_agent(self.agent)
         self.from_pkl = False
+        self.default_event_handler = self.handle_default_event
+        self.stone_numbers = np.array([[None for y in range(self.size_y)] for x in range(self.size_x)])
+        self.last_number = 0
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -115,8 +122,6 @@ class GoBoard(QWidget):
                                           self.a0pos.predicted_black_next_moves.shape)
         top_white_move = np.unravel_index(np.argmax(self.a0pos.predicted_white_next_moves, axis=None),
                                           self.a0pos.predicted_white_next_moves.shape)
-        # print(self.ownership_choice)
-        # print(self.move_choice)
         for i in range(self.size_x):
             for j in range(self.size_y):
                 x = self.margin + i * self.stone_radius * 2
@@ -171,12 +176,11 @@ class GoBoard(QWidget):
 
                 move_size = int(self.stone_radius / 2)
                 if self.move_choice == "show_top_b_w":
-                    threshold = 3 * 100 * 255  # What should it be? it was written 100
+                    threshold = 3 * 255  # What should it be? it was written 100
 
                     black_move_alpha = int(100 * 255 * self.a0pos.predicted_black_next_moves[i][j])
 
                     if black_move_alpha > threshold and top_black_move[0] == i and top_black_move[1] == j:
-                        # print("Top black move:", top_black_move, self.a0pos.predicted_black_next_moves[i][j])
                         painter.setBrush(QBrush(QColor(0, 0, 0, black_move_alpha)))
                         painter.setPen(QPen(QColor("black")))
                         painter.drawPolygon(self.get_cross(move_size, x, y))
@@ -184,7 +188,6 @@ class GoBoard(QWidget):
                     white_move_alpha = int(100 * 255 * self.a0pos.predicted_white_next_moves[i][j])
 
                     if white_move_alpha > threshold and top_white_move[0] == i and top_white_move[1] == j:
-                        # print("Top white move:", top_white_move, self.a0pos.predicted_white_next_moves[i][j])
                         painter.setBrush(QBrush(QColor(255, 255, 255, white_move_alpha)))
                         painter.setPen(QPen(QColor("white")))
                         painter.drawEllipse(x - move_size, y - move_size, 2 * move_size, 2 * move_size)
@@ -215,8 +218,8 @@ class GoBoard(QWidget):
                 #     painter.setPen(QPen(color, 0, Qt.SolidLine))
                 #     painter.drawRect(x - int(self.stone_radius), y - int(self.stone_radius),
                 #                      2 * int(self.stone_radius), 2 * int(self.stone_radius))
-                    #* self.b_radius if self.a0pos.stones[i][
-                    #                      j] == BLACK else self.stone_radius * self.w_radius
+                #* self.b_radius if self.a0pos.stones[i][
+                #                      j] == BLACK else self.stone_radius * self.w_radius
                 if self.local_mask is not None:
                     if not self.local_mask[i][j]:
                         color = QColor(255, 255, 255, 127)
@@ -256,42 +259,92 @@ class GoBoard(QWidget):
         transform.rotate(rotation)
         return transform.map(polygon)
 
-    def mousePressEvent2(self, event):
-        if event.button() == Qt.RightButton:
-            self.undo_move()
-            self.update()
+    def remove_stone(self, sgf_coords):
+        for prop in ["AB", "AW"]:
+            placements = self.position_tree.current_node.get_list_property(prop, [])
+            if sgf_coords in placements:
+                self.position_tree.current_node.set_property(prop, [xy for xy in placements if xy != sgf_coords])
+
+    def add_black_stones(self, event):
+        color = "W" if event.button() == Qt.RightButton else "B"
+        self.add_stone(event, color)
+
+    def add_white_stones(self, event):
+        color = "B" if event.button() == Qt.RightButton else "W"
+        self.add_stone(event, color)
+
+    def add_stone(self, event, color):
+        if self.position_tree.current_node.parent is not None: # not np.all(np.array(self.stone_numbers) == None):
+            print("Already has moves, cannot add stones anymore")
             return
         pos = event.pos()
         row, col = self.pixel_to_board(pos.x(), pos.y())
-        if 0 <= row < self.size_x and 0 <= col < self.size_y and not self.a0pos.stones[row][col]:
-            # Place a stone at the clicked position
-            self.last_color = - self.last_color
-            self.a0pos.stones[row][col] = self.last_color
-            self.last_number += 1
-            self.stone_numbers[row][col] = self.last_number
-
+        prop = "A" + color
+        if 0 <= row < self.size_x and 0 <= col < self.size_y:
+            added_stone = Move((row, col)).sgf([19, 19])
+            if not self.a0pos.stones[row][col]:
+                # Place a stone at the clicked position
+                try:
+                    self.position_tree.current_node.add_list_property(prop, [added_stone])
+                except KeyError:
+                    self.position_tree.current_node.set_property(prop, [added_stone])
+            else:
+                self.remove_stone(added_stone)
+            self.position_tree._calculate_groups()
+            self.position_tree.update_a0pos_state()
             self.update()
 
-    def mousePressEvent(self, event):
+    def add_mask(self, event):
         pos = event.pos()
         row, col = self.pixel_to_board(pos.x(), pos.y())
         if 0 <= row < self.size_x and 0 <= col < self.size_y:
-            if event.button() == Qt.RightButton:
-                self.local_mask = None
-                self.a0pos.reset_predictions()
-            else:
-                self.local_mask = self.a0pos.get_local_pos_mask((row, col))
-                self.a0pos.analyze_pos(self.local_mask)
+            self.local_mask[row][col] = 1 - self.local_mask[row][col]
             self.update()
 
+    def add_moves(self, event):
+        color = self.last_color if event.button() == Qt.RightButton else - self.last_color
+        self.last_color = color
+        color = "B" if color == 1 else "W"
+        pos = event.pos()
+        row, col = self.pixel_to_board(pos.x(), pos.y())
+        if 0 <= row < self.size_x and 0 <= col < self.size_y:
+            added_stone = Move((row, col), player=color)
+            self.last_number += 1
+            self.stone_numbers[row][col] = self.last_number
+            self.position_tree.play(added_stone)
+            self.update()
+
+    def mousePressEvent(self, event):
+        self.default_event_handler(event)
+
+    def handle_default_event(self, event):
+        pos = event.pos()
+        row, col = self.pixel_to_board(pos.x(), pos.y())
+        if 0 <= row < self.size_x and 0 <= col < self.size_y:
+            try:
+                if event.button() == Qt.RightButton:
+                    self.local_mask = None
+                    self.a0pos.reset_predictions()
+                else:
+                    self.local_mask = self.a0pos.get_local_pos_mask((row, col))
+                    self.a0pos.analyze_pos(self.local_mask)
+                self.update()
+            except:
+                pass
+
     def undo_move(self):
-        for i in range(self.size_x):
-            for j in range(self.size_y):
-                if self.stone_numbers[i][j] == self.last_number:
-                    self.stone_numbers[i][j] = None
-                    self.a0pos.stones[i][j] = None
+        if self.position_tree.current_node.parent is not None:
+            self.position_tree.current_node = self.position_tree.current_node.parent
+            del self.position_tree.current_node.children[0]
+        self.stone_numbers = np.where(self.stone_numbers == self.last_number, None, self.stone_numbers)
         self.last_number -= 1
         self.last_color = - self.last_color
+        self.update()
+
+    def clear_board(self):
+        self.reset_numbers()
+        del self.position_tree
+        self.position_tree = PositionTree.from_a0pos(AnalyzedPosition())
         self.update()
 
     def pixel_to_board(self, x, y):
@@ -300,27 +353,33 @@ class GoBoard(QWidget):
         return row, col
 
     def reset_numbers(self):
-        self.stone_numbers = [[None for y in range(self.size_y)] for x in range(self.size_x)]
+        self.stone_numbers = np.array([[None for y in range(self.size_y)] for x in range(self.size_x)])
         self.last_number = 0
 
+    @property
+    def a0pos(self):
+        return self.position_tree.current_node.a0pos
+
     def visualize_position(self, gtp_position):
-        self.a0pos = AnalyzedPosition.from_gtp_log(gtp_position) if not self.from_pkl else AnalyzedPosition.from_jax(gtp_position)
+        a0pos = AnalyzedPosition.from_gtp_log(gtp_position) if not self.from_pkl else AnalyzedPosition.from_jax(gtp_position)
+        self.position_tree = PositionTree.from_a0pos(a0pos)
         self.local_mask = self.a0pos.local_mask if self.a0pos.fixed_mask else None
         self.a0pos.load_agent(self.agent)
-        self.a0pos.analyze_pos(self.local_mask)
+        self.a0pos.analyze_pos(self.local_mask, self.agent)
         self.size_x, self.size_y = self.a0pos.size_x, self.a0pos.size_y
         self.reset_numbers()
         self.update()
 
     def load_agent(self, ckpt_path):
         backbone = ResnetPolicyValueNet128(input_dims=(9, 9, 9), num_actions=82)
-        self.agent = TransferResnet(backbone)
-        self.agent = self.agent.eval()
+        agent = TransferResnet(backbone)
+        agent = agent.eval()
         with open(ckpt_path, "rb") as f:
             loaded_agent = pickle.load(f)
             if "agent" in loaded_agent:
                 loaded_agent = loaded_agent["agent"]
-            self.agent = self.agent.load_state_dict(loaded_agent)
+            agent = agent.load_state_dict(loaded_agent)
+        return agent
 
 
 class MainWindow(QMainWindow):
@@ -354,8 +413,54 @@ class MainWindow(QMainWindow):
         self.select_dir_button.setStyleSheet("QPushButton {"
                                              "background-color: #D3D3D3;}")
 
+        self.set_up_button = QPushButton(self)
+        self.set_up_button.setCheckable(True)
+        self.set_up_button.setText("Set up position")
+        self.set_up_button.toggled.connect(self.set_up_position)
+        self.set_up_button.setStyleSheet("QToolButton {"
+                                             "background-color: #D3D3D3;}")
+        self.add_black_button = QToolButton(self)
+        self.add_black_button.setCheckable(True)
+        self.add_black_button.toggled.connect(self.add_black_stones)
+        self.add_black_button.setText("Black")
+        self.add_white_button = QToolButton(self)
+        self.add_white_button.setCheckable(True)
+        self.add_white_button.toggled.connect(self.add_white_stones)
+        self.add_white_button.setText("White")
+        self.add_moves_button = QToolButton(self)
+        self.add_moves_button.setCheckable(True)
+        self.add_moves_button.toggled.connect(self.add_moves)
+        self.add_moves_button.setText("Moves")
+        self.add_mask_button = QToolButton(self)
+        self.add_mask_button.setCheckable(True)
+        self.add_mask_button.toggled.connect(self.add_mask)
+        self.add_mask_button.setText("Mask")
+        self.undo_button = QPushButton("Undo", self)
+        self.undo_button.clicked.connect(self.undo_move)
+        self.clear_button = QPushButton("Clear", self)
+        self.clear_button.clicked.connect(self.clear_board)
+        self.set_up_layout = QHBoxLayout()
+        self.set_up_layout.addWidget(self.add_black_button)
+        self.set_up_layout.addWidget(self.add_white_button)
+        self.set_up_layout.addWidget(self.add_moves_button)
+        self.set_up_layout.addWidget(self.add_mask_button)
+        self.set_up_layout.addWidget(self.undo_button)
+        self.set_up_layout.addWidget(self.clear_button)
+        self.set_up_group = QButtonGroup()
+        self.set_up_group.addButton(self.add_black_button)
+        self.set_up_group.addButton(self.add_white_button)
+        self.set_up_group.addButton(self.add_moves_button)
+        self.set_up_group.addButton(self.add_mask_button)
+        self.set_up_group.setExclusive(True)
+        self.set_up_frame = QFrame()
+        self.set_up_frame.setLayout(self.set_up_layout)
+
         buttons_layout = QVBoxLayout()
         buttons_layout.addWidget(self.select_dir_button)
+        buttons_layout.addWidget(self.set_up_button)
+        buttons_layout.addWidget(self.set_up_frame)
+        self.set_up_frame.hide()
+
         buttons_layout.addStretch()
 
         buttons_layout.addWidget(QLabel("Ownership:"))
@@ -491,6 +596,46 @@ class MainWindow(QMainWindow):
         if self.current_position_index < len(self.positions) - 1:
             self.current_position_index += 1
             self.visualize_position()
+
+    def set_up_position(self):
+        # self.set_up_layout.setVisible(not self.set_up_layout.isVisible())
+        if self.set_up_button.isChecked():
+            self.set_up_button.setText("Finish and analyze")
+            self.set_up_frame.show()
+        else:
+            self.set_up_button.setText("Set up position")
+            self.set_up_frame.hide()
+            self.go_board.position_tree.update_a0pos_state()
+            self.go_board.a0pos.analyze_pos(self.go_board.local_mask, self.go_board.agent)
+            self.update_buttons()
+            self.go_board.update()
+
+    def add_black_stones(self):
+        if self.add_black_button.isChecked():
+            self.go_board.default_event_handler = self.go_board.add_black_stones
+
+    def add_white_stones(self):
+        if self.add_white_button.isChecked():
+            self.go_board.default_event_handler = self.go_board.add_white_stones
+
+    def add_moves(self):
+        if self.add_moves_button.isChecked():
+            self.go_board.default_event_handler = self.go_board.add_moves
+
+    def add_mask(self):
+        if self.add_mask_button.isChecked():
+            self.go_board.local_mask = [[0 for y in range(self.go_board.a0pos.pad_size)]
+                          for x in range(self.go_board.a0pos.pad_size)]
+            self.go_board.update()
+            self.go_board.default_event_handler = self.go_board.add_mask
+
+    def undo_move(self):
+        self.go_board.undo_move()
+        self.go_board.update()
+
+    def clear_board(self):
+        self.go_board.clear_board()
+        self.go_board.update()
 
     def select_directory(self):
         settings = QSettings("GoBoard", "Settings")

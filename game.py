@@ -4,7 +4,7 @@ import os
 import re
 import threading
 from datetime import datetime
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, TypeVar, Generic
 
 # from kivy.clock import Clock
 
@@ -32,6 +32,7 @@ from sgf_parser import SGF, Move
 from katrain_utils import var_to_grid
 from game_node import GameNode
 
+T = TypeVar('T', bound=GameNode)
 
 
 class IllegalMoveException(Exception):
@@ -42,7 +43,7 @@ class KaTrainSGF(SGF):
     _NODE_CLASS = GameNode
 
 
-class BaseGame:
+class BaseGame(Generic[T]):
     """Represents a game of go, including an implementation of capture rules."""
 
     DEFAULT_PROPERTIES = {"GM": 1, "FF": 4}
@@ -50,7 +51,7 @@ class BaseGame:
     def __init__(
         self,
         # katrain,
-        move_tree: GameNode = None,
+        move_tree: T = None,
         # game_properties: Optional[Dict] = None,
         sgf_filename=None,
         # bypass_config=False,  # TODO: refactor?
@@ -106,6 +107,7 @@ class BaseGame:
         # if not self.root.get_property("RU"):  # if rules missing in sgf, inherit current
         #     self.root.set_property("RU", katrain.config("game/rules"))
 
+        self.current_node: T = self.root
         self.set_current_node(self.root)
         self.main_time_used = 0
 
@@ -240,8 +242,8 @@ class BaseGame:
                 node = node.play(move)
         return node
 
-    def set_current_node(self, node):
-        self.current_node = node
+    def set_current_node(self, node: T):
+        self.current_node: T = node
         self._calculate_groups()
 
     def undo(self, n_times=1, stop_on_mistake=None):
