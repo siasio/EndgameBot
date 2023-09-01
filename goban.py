@@ -67,7 +67,7 @@ class GoBoard(QWidget):
         self.local_mask = [[1 for y in range(self.a0pos.pad_size)]
                            for x in range(self.a0pos.pad_size)]
         self.agent = self.load_agent(os.path.join(os.getcwd(), 'a0-jax', "trained.ckpt"))
-        self.a0pos.load_agent(self.agent)
+        self.position_tree.load_agent(self.agent)
         self.from_pkl = False
         self.default_event_handler = self.handle_default_event
         self.stone_numbers = np.array([[None for y in range(self.size_y)] for x in range(self.size_x)])
@@ -122,6 +122,8 @@ class GoBoard(QWidget):
                                           self.a0pos.predicted_black_next_moves.shape)
         top_white_move = np.unravel_index(np.argmax(self.a0pos.predicted_white_next_moves, axis=None),
                                           self.a0pos.predicted_white_next_moves.shape)
+        gt_ownership = self.position_tree.current_node.calculated_ownership if self.position_tree.current_node.calculated_ownership is not None else self.a0pos.ownership
+
         for i in range(self.size_x):
             for j in range(self.size_y):
                 x = self.margin + i * self.stone_radius * 2
@@ -146,19 +148,13 @@ class GoBoard(QWidget):
                         painter.setPen(QColor("white" if self.a0pos.stones[i][j] == BLACK else "black"))
                         draw_text(x, y, str(corresponding_number))
 
-                if self.a0pos.last_move is not None:
-                    if i == self.a0pos.last_move[0] and j == self.a0pos.last_move[1]:
-                        #
-                        # pen = QPen(QColor("white"), self.w_border, Qt.SolidLine) if self.a0pos.stones[i][
-                        #                                                                 j] == BLACK else QPen(
-                        #     QColor("black"), self.b_border, Qt.SolidLine)
-                        # painter.setPen(pen)
-                        painter.setBrush(QBrush(QColor("red")))
-                        radius_to_use = self.stone_radius * self.b_radius * 0.3
-                        painter.drawEllipse(QPoint(x, y), radius_to_use, radius_to_use)
+                if self.a0pos.last_move is not None and i == self.a0pos.last_move[0] and j == self.a0pos.last_move[1] and self.stone_numbers[i][j] is None:
+                    painter.setBrush(QBrush(QColor("red")))
+                    radius_to_use = self.stone_radius * self.b_radius * 0.3
+                    painter.drawEllipse(QPoint(x, y), radius_to_use, radius_to_use)
 
-                if self.show_gt_ownership and self.a0pos.ownership[i][j]:
-                    rgb = ownership_to_rgb(self.a0pos.ownership[i][j])
+                if self.show_gt_ownership and gt_ownership[i][j]:
+                    rgb = ownership_to_rgb(gt_ownership[i][j])
                     painter.setBrush(QBrush(QColor(rgb, rgb, rgb, 127)))
                     painter.setPen(Qt.NoPen)
                     painter.drawRect(x, y, int(self.stone_radius), int(self.stone_radius))
@@ -302,6 +298,7 @@ class GoBoard(QWidget):
             self.update()
 
     def add_moves(self, event):
+        print(self.a0pos.stones)
         color = self.last_color if event.button() == Qt.RightButton else - self.last_color
         self.last_color = color
         color = "B" if color == 1 else "W"
@@ -335,8 +332,7 @@ class GoBoard(QWidget):
     def undo_move(self):
         # TODO: Currently, it's not working well
         if self.position_tree.current_node.parent is not None:
-            self.position_tree.current_node = self.position_tree.current_node.parent
-            del self.position_tree.current_node.children[0]
+            self.position_tree.undo()
         self.stone_numbers = np.where(self.stone_numbers == self.last_number, None, self.stone_numbers)
         self.last_number -= 1
         self.last_color = - self.last_color
@@ -346,6 +342,7 @@ class GoBoard(QWidget):
         self.reset_numbers()
         del self.position_tree
         self.position_tree = PositionTree.from_a0pos(AnalyzedPosition())
+        self.position_tree.load_agent(self.agent)
         self.update()
 
     def pixel_to_board(self, x, y):
@@ -366,7 +363,7 @@ class GoBoard(QWidget):
         self.position_tree = PositionTree.from_a0pos(a0pos)
         # self.position_tree.update_a0pos_state()
         self.local_mask = self.a0pos.local_mask if self.a0pos.fixed_mask else None
-        self.a0pos.load_agent(self.agent)
+        self.position_tree.load_agent(self.agent)
         self.a0pos.analyze_pos(self.local_mask, self.agent)
         self.size_x, self.size_y = self.a0pos.size_x, self.a0pos.size_y
         self.reset_numbers()
@@ -419,7 +416,7 @@ class MainWindow(QMainWindow):
         self.set_up_button.setCheckable(True)
         self.set_up_button.setText("Set up position")
         self.set_up_button.toggled.connect(self.set_up_position)
-        self.set_up_button.setStyleSheet("QToolButton {"
+        self.set_up_button.setStyleSheet("QPushButton {"
                                              "background-color: #D3D3D3;}")
         self.add_black_button = QToolButton(self)
         self.add_black_button.setCheckable(True)
@@ -462,6 +459,12 @@ class MainWindow(QMainWindow):
         buttons_layout.addWidget(self.set_up_button)
         buttons_layout.addWidget(self.set_up_frame)
         self.set_up_frame.hide()
+
+        self.calculate_button = QPushButton("Calculate temperature", self)
+        self.calculate_button.clicked.connect(self.calculate_score)
+        self.calculate_button.setStyleSheet("QPushButton {"
+                                             "background-color: #D3D3D3;}")
+        buttons_layout.addWidget(self.calculate_button)
 
         buttons_layout.addStretch()
 
@@ -608,6 +611,7 @@ class MainWindow(QMainWindow):
             self.set_up_button.setText("Set up position")
             self.set_up_frame.hide()
             self.go_board.position_tree.update_a0pos_state()
+            self.go_board.a0pos.local_mask = self.go_board.local_mask
             self.go_board.a0pos.analyze_pos(self.go_board.local_mask, self.go_board.agent)
             self.update_buttons()
             self.go_board.update()
@@ -639,6 +643,12 @@ class MainWindow(QMainWindow):
         self.go_board.clear_board()
         self.go_board.update()
 
+    def calculate_score(self):
+        self.go_board.position_tree.current_node.calculate_score_and_ownership()
+        # score = self.go_board.position_tree.current_node.calculated_score
+        # ownership = self.go_board.position_tree.current_node.calculated_ownership
+        self.update_buttons()
+
     def select_directory(self):
         settings = QSettings("GoBoard", "Settings")
         last_directory = settings.value("last_directory")
@@ -668,8 +678,8 @@ class MainWindow(QMainWindow):
             # self.update_pinned_directories(selected_directory)
 
     def update_buttons(self):
-        w_res = self.go_board.a0pos.w_score
-        b_res = self.go_board.a0pos.b_score
+        w_res = self.go_board.position_tree.current_node.w_score
+        b_res = self.go_board.position_tree.current_node.b_score
         diff = b_res - w_res
         self.label.setText(f'Difference {abs(diff):.2f}')
         black_move_prob = self.go_board.a0pos.black_move_prob

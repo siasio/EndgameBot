@@ -55,18 +55,18 @@ artificial_kernels = [
 ]
 
 
-class GoPosition:
-    def __init__(self, size=19):
-        self.last_color = WHITE
+# class GoPosition:
+#     def __init__(self, size=19):
+#         # self.last_color = WHITE
+#
+#         # self.stones = np.array([[0 for y in range(size)]
+#         #                         for x in range(size)])
 
-        # self.stones = np.array([[0 for y in range(size)]
-        #                         for x in range(size)])
 
-
-class AnalyzedPosition(GoPosition):
+class AnalyzedPosition:
 
     def __init__(self, pad_size=19):
-        super().__init__(size=pad_size)
+        # super().__init__(size=pad_size)
         self.pad_size = pad_size
         self.cur_id = None
         self.shape = (pad_size, pad_size)
@@ -87,19 +87,22 @@ class AnalyzedPosition(GoPosition):
                                     for x in range(self.pad_size)])
         self.agent = None
 
-        self.b_score: float = 0.0
-        self.w_score: float = 0.0
         self.size_x: int = 19
         self.size_y: int = 19
         self.game: KaTrainSGF = None
         self.fixed_mask = False
         self.next_move = None
-        self.local_mask = None
+        self.local_mask = np.array([[1 for y in range(self.pad_size)]
+                                    for x in range(self.pad_size)])
+        self.color_to_play = 1
 
         stones = np.array([[0 for y in range(self.pad_size)]
                                     for x in range(self.pad_size)])
         # self.stones = stones
         self.stacked_pos = stack_last_state(np.array(stones))
+        self.black_move_prob = 0.0
+        self.white_move_prob = 0.0
+        self.no_move_prob = 0.0
 
     @property
     def stones(self):
@@ -118,8 +121,9 @@ class AnalyzedPosition(GoPosition):
     def from_jax(cls, jax_data):  # TrainingOwnershipExample):
         obj = cls()
         obj.fixed_mask = True
-        # obj.stones = np.array(jax_data.state[..., 7])
-        obj.stacked_pos = np.array(jax_data.state)
+        stacked_pos = np.array(jax_data.state)
+        obj.color_to_play = -1 if stacked_pos[0, 0, -1] == -1 else 1
+        obj.stacked_pos = stacked_pos * obj.color_to_play
         obj.ownership = np.array(jax_data.value.reshape(obj.shape))
         obj.local_mask = np.array(jax_data.mask)
         obj.board_mask = np.array(jax_data.board_mask)
@@ -205,13 +209,13 @@ class AnalyzedPosition(GoPosition):
     def analyze_pos(self, mask, agent=None):
         if agent is None:
             agent = self.agent
-        state = jnp.array(self.stacked_pos)
-        color = self.stacked_pos[0, 0, -1]  # it can be 1, 0, or -1
+        state = jnp.array(self.stacked_pos * self.color_to_play)
+        # color = self.stacked_pos[0, 0, -1]  # it can be 1, 0, or -1
         board_mask = jnp.array(self.board_mask)
         mask = jnp.array(mask)
         action_logits, ownership_map = agent((state, mask, board_mask), batched=False)
         self.predicted_ownership = np.array(ownership_map)  # .reshape(self.shape)
-        if color == -1:
+        if self.color_to_play == -1:
             self.predicted_ownership = - self.predicted_ownership
         if action_logits.shape[-1] == 2:
             self.predicted_black_next_moves = np.array(action_logits[..., 1])
@@ -220,8 +224,8 @@ class AnalyzedPosition(GoPosition):
             action_logits = jax.nn.softmax(action_logits, axis=-1)
             black_next_moves = np.array(action_logits[self.num_intersections:2 * self.num_intersections]).reshape(self.shape)
             white_next_moves = np.array(action_logits[:self.num_intersections]).reshape(self.shape)
-            self.predicted_black_next_moves = black_next_moves if color != -1 else white_next_moves
-            self.predicted_white_next_moves = white_next_moves if color != -1 else black_next_moves
+            self.predicted_black_next_moves = black_next_moves if self.color_to_play != -1 else white_next_moves
+            self.predicted_white_next_moves = white_next_moves if self.color_to_play != -1 else black_next_moves
             self.black_move_prob = np.sum(self.predicted_black_next_moves)
             self.white_move_prob = np.sum(self.predicted_white_next_moves)
             self.no_move_prob = action_logits[-1].astype(float)
