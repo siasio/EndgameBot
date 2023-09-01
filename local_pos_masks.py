@@ -59,8 +59,8 @@ class GoPosition:
     def __init__(self, size=19):
         self.last_color = WHITE
 
-        self.stones = np.array([[0 for y in range(size)]
-                                for x in range(size)])
+        # self.stones = np.array([[0 for y in range(size)]
+        #                         for x in range(size)])
 
 
 class AnalyzedPosition(GoPosition):
@@ -85,9 +85,6 @@ class AnalyzedPosition(GoPosition):
 
         self.board_mask = np.array([[0 for y in range(self.pad_size)]
                                     for x in range(self.pad_size)])
-
-        self.stones = np.array([[0 for y in range(self.pad_size)]
-                                    for x in range(self.pad_size)])
         self.agent = None
 
         self.b_score: float = 0.0
@@ -98,14 +95,31 @@ class AnalyzedPosition(GoPosition):
         self.fixed_mask = False
         self.next_move = None
         self.local_mask = None
-        self.stacked_pos = stack_last_state(jnp.array(self.stones))
+
+        stones = np.array([[0 for y in range(self.pad_size)]
+                                    for x in range(self.pad_size)])
+        # self.stones = stones
+        self.stacked_pos = stack_last_state(np.array(stones))
+
+    @property
+    def stones(self):
+        if self.stacked_pos[0, 0, -1].astype(int) == -1:
+            return - self.stacked_pos[..., -2]
+        return self.stacked_pos[..., -2]
+        # if self.stacked_pos is not None and self.stacked_pos[0, 0, -1].astype(int) == -1:
+        #     return - self.__stones
+        # return self.__stones
+
+    # @stones.setter
+    # def stones(self, stones):
+    #     self.__stones = stones
 
     @classmethod
     def from_jax(cls, jax_data):  # TrainingOwnershipExample):
         obj = cls()
         obj.fixed_mask = True
-        obj.stones = np.array(jax_data.state[..., 7])
-        obj.stacked_pos = jax_data.state
+        # obj.stones = np.array(jax_data.state[..., 7])
+        obj.stacked_pos = np.array(jax_data.state)
         obj.ownership = np.array(jax_data.value.reshape(obj.shape))
         obj.local_mask = np.array(jax_data.mask)
         obj.board_mask = np.array(jax_data.board_mask)
@@ -157,7 +171,7 @@ class AnalyzedPosition(GoPosition):
     def last_move(self):
         if self.stacked_pos is None:
             return None
-        if -1 < jnp.sum(self.stacked_pos[..., -1]) < 1:
+        if -1 < np.sum(self.stacked_pos[..., -1]) < 1:
             # The last channel in stacked_pos is an indicator of what is last move's color
             # If it's filled with zeros, it means that no information about the last move is included
             return None
@@ -191,19 +205,23 @@ class AnalyzedPosition(GoPosition):
     def analyze_pos(self, mask, agent=None):
         if agent is None:
             agent = self.agent
-        state = self.stacked_pos
-        color = self.stacked_pos[0, 0, -1]
+        state = jnp.array(self.stacked_pos)
+        color = self.stacked_pos[0, 0, -1]  # it can be 1, 0, or -1
         board_mask = jnp.array(self.board_mask)
         mask = jnp.array(mask)
         action_logits, ownership_map = agent((state, mask, board_mask), batched=False)
-        self.predicted_ownership = jnp.array(ownership_map)  # .reshape(self.shape)
+        self.predicted_ownership = np.array(ownership_map)  # .reshape(self.shape)
+        if color == -1:
+            self.predicted_ownership = - self.predicted_ownership
         if action_logits.shape[-1] == 2:
             self.predicted_black_next_moves = np.array(action_logits[..., 1])
             self.predicted_white_next_moves = np.array(action_logits[..., 0])
         else:
             action_logits = jax.nn.softmax(action_logits, axis=-1)
-            self.predicted_black_next_moves = np.array(action_logits[self.num_intersections:2 * self.num_intersections]).reshape(self.shape)
-            self.predicted_white_next_moves = np.array(action_logits[:self.num_intersections]).reshape(self.shape)
+            black_next_moves = np.array(action_logits[self.num_intersections:2 * self.num_intersections]).reshape(self.shape)
+            white_next_moves = np.array(action_logits[:self.num_intersections]).reshape(self.shape)
+            self.predicted_black_next_moves = black_next_moves if color != -1 else white_next_moves
+            self.predicted_white_next_moves = white_next_moves if color != -1 else black_next_moves
             self.black_move_prob = np.sum(self.predicted_black_next_moves)
             self.white_move_prob = np.sum(self.predicted_white_next_moves)
             self.no_move_prob = action_logits[-1].astype(float)
@@ -213,7 +231,7 @@ class AnalyzedPosition(GoPosition):
             for coords in stones[color]:
                 stone = Move.from_gtp(coords, color)
                 self.stones[stone.coords[0]][stone.coords[1]] = BLACK if stone.player == 'B' else WHITE
-        self.stacked_pos = stack_last_state(jnp.array(self.stones))
+        self.stacked_pos = stack_last_state(np.array(self.stones))
 
     def moves_from_gtp(self, moves):
         for move in moves:

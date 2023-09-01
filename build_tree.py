@@ -93,20 +93,21 @@ class PositionTree(BaseGame[LocalPositionNode]):
         self.update_a0pos_state()
 
     def update_a0pos_state(self):
-        self.current_node.a0pos.stones = self.get_position()
+        stones = self.get_position()
         if self.current_node.parent is None:
-            self.current_node.a0pos.stacked_pos = stack_last_state(jnp.array(self.current_node.a0pos.stones))
+            self.current_node.a0pos.stacked_pos = stack_last_state(np.array(stones))
         else:
             previous_stacked_pos = self.current_node.parent.a0pos.stacked_pos
             color_to_play = - self.current_node.player_sign(self.current_node.player)
             if self.current_node.parent.player == self.current_node.player:
                 self.current_node.a0pos.stacked_pos = add_new_stack_previous_state(previous_stacked_pos,
-                                                                                   jnp.array(self.current_node.a0pos.stones),
+                                                                                   np.array(stones),
                                                                                    color_to_play)
             else:
                 self.current_node.a0pos.stacked_pos = add_new_state(previous_stacked_pos,
-                                                                    jnp.array(self.current_node.a0pos.stones),
+                                                                    np.array(stones),
                                                                     color_to_play)
+            # self.current_node.a0pos.stones *= color_to_play
 
     def get_position(self):
         arr = np.zeros(self.board_size)

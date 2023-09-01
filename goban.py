@@ -333,6 +333,7 @@ class GoBoard(QWidget):
                 pass
 
     def undo_move(self):
+        # TODO: Currently, it's not working well
         if self.position_tree.current_node.parent is not None:
             self.position_tree.current_node = self.position_tree.current_node.parent
             del self.position_tree.current_node.children[0]
@@ -363,6 +364,7 @@ class GoBoard(QWidget):
     def visualize_position(self, gtp_position):
         a0pos = AnalyzedPosition.from_gtp_log(gtp_position) if not self.from_pkl else AnalyzedPosition.from_jax(gtp_position)
         self.position_tree = PositionTree.from_a0pos(a0pos)
+        # self.position_tree.update_a0pos_state()
         self.local_mask = self.a0pos.local_mask if self.a0pos.fixed_mask else None
         self.a0pos.load_agent(self.agent)
         self.a0pos.analyze_pos(self.local_mask, self.agent)
