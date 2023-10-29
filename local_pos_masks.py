@@ -73,7 +73,7 @@ class AnalyzedPosition:
         self.num_intersections = pad_size * pad_size
         self.ownership = np.array([[0 for y in range(self.pad_size)]
                                    for x in range(self.pad_size)])
-        self.continous_ownership = np.array([[0.0 for y in range(self.pad_size)]
+        self.continuous_ownership = np.array([[0.0 for y in range(self.pad_size)]
                                              for x in range(self.pad_size)], dtype=float)
         self.final_ownership = np.array([[0 for y in range(self.pad_size)]
                                          for x in range(self.pad_size)])
@@ -100,9 +100,6 @@ class AnalyzedPosition:
                                     for x in range(self.pad_size)])
         # self.stones = stones
         self.stacked_pos = stack_last_state(np.array(stones))
-        self.black_move_prob = 0.0
-        self.white_move_prob = 0.0
-        self.no_move_prob = 0.0
 
     @property
     def stones(self):
@@ -229,6 +226,10 @@ class AnalyzedPosition:
             self.black_move_prob = np.sum(self.predicted_black_next_moves)
             self.white_move_prob = np.sum(self.predicted_white_next_moves)
             self.no_move_prob = action_logits[-1].astype(float)
+            # print(self.black_move_prob, self.white_move_prob, self.no_move_prob)
+
+    def clear_analysis(self):
+        pass
 
     def stones_from_gtp(self, stones):
         for color in 'BW':
@@ -242,23 +243,38 @@ class AnalyzedPosition:
             stone = Move.from_gtp(move[1], move[0])
             self.stones[stone.coords[0]][stone.coords[1]] = stone.player
 
-    def update_ownership(self, w_ownership, b_ownership, threshold=ownership_strict_threshold):
+    @staticmethod
+    def update_ownership(
+            w_ownership,
+            b_ownership,
+            final_ownership: np.ndarray,
+            size_x: int,
+            size_y: int,
+            pad_size: int,
+            threshold=ownership_strict_threshold
+    ):
         # The ownership map is given in the "reading" order:
         # Firstly, from right to left, then, from top to bottom
         # The GTP coordinates, however, represent the position from bottom to top (19th line is on the top)
         # Thus, we need to take self.size_y - y - 1 as a vertical index
-        w_ownership = np.moveaxis(np.array(w_ownership).reshape((self.size_x, self.size_y)), 0, -1)[:, ::-1]
-        b_ownership = np.moveaxis(np.array(b_ownership).reshape((self.size_x, self.size_y)), 0, -1)[:, ::-1]
-        self.continous_ownership[:self.size_x, :self.size_y] = self.mean_scaled_ownership(b_ownership, w_ownership)
+        w_ownership = np.moveaxis(np.array(w_ownership).reshape((size_x, size_y)), 0, -1)[:, ::-1]
+        b_ownership = np.moveaxis(np.array(b_ownership).reshape((size_x, size_y)), 0, -1)[:, ::-1]
+        continuous_ownership = np.array([[0.0 for y in range(pad_size)]
+                                         for x in range(pad_size)], dtype=float)
+        ownership = np.array([[0 for y in range(pad_size)]
+                              for x in range(pad_size)])
+        continuous_ownership[:size_x, :size_y] = AnalyzedPosition.mean_scaled_ownership(b_ownership, w_ownership)
 
-        self.ownership[:self.size_x, :self.size_y] = np.logical_and(
-                                                      np.logical_and((w_ownership > max_ownership - threshold),
-                                                      (b_ownership > max_ownership - threshold)),
-                                                       self.final_ownership[:self.size_x, :self.size_y] == 1).astype(np.int8) - \
-                                                     np.logical_and(
-                                                      np.logical_and((w_ownership < threshold),
-                                                      (b_ownership < threshold)),
-                                                       self.final_ownership[:self.size_x, :self.size_y] == -1).astype(np.int8)
+        ownership[:size_x, :size_y] = np.logical_and(
+                                                    np.logical_and(
+                                                        (w_ownership > max_ownership - threshold),
+                                                        (b_ownership > max_ownership - threshold)
+                                                                   ),
+                                                    final_ownership[:size_x, :size_y] == 1).astype(np.int8) - np.logical_and(
+                                                        np.logical_and((w_ownership < threshold),
+                                                        (b_ownership < threshold)
+                                                                       ),
+                                                       final_ownership[:size_x, :size_y] == -1).astype(np.int8)
 
     def update_final_ownership(self, gtp_position, threshold=ownership_lenient_threshold):
         try:
@@ -334,7 +350,7 @@ class AnalyzedPosition:
         positions.append(np.full(self.shape, color_to_play))
         if player is not None:
             player = player * color_to_play
-        to_return.append((local_mask, positions, coords, player, self.continous_ownership * color_to_play))
+        to_return.append((local_mask, positions, coords, player, self.continuous_ownership * color_to_play))
 
         same_positions = [np.array(cur_pos)] * 8
         same_positions.append(np.zeros(self.shape))
@@ -359,7 +375,7 @@ class AnalyzedPosition:
             #     if coords:
             #         coords = (self.pad_size - coords[0] - 1, coords[1])
 
-            to_return.append((local_mask, same_positions, coords, player, self.continous_ownership))
+            to_return.append((local_mask, same_positions, coords, player, self.continuous_ownership))
             if counter > 2:
                 break
         return to_return
@@ -398,8 +414,15 @@ class AnalyzedPosition:
                                                     for x in range(self.pad_size)])
         self.predicted_black_next_moves = np.array([[0 for y in range(self.pad_size)]
                                                     for x in range(self.pad_size)])
+        self.black_move_prob = 0.0
+        self.white_move_prob = 0.0
+        self.no_move_prob = 0.0
 
     def board_segmentation(self, mode='cv'):
+        """
+        Segments the board into connected components
+        :param mode: 'cv' for OpenCV, 'scipy' for scipy.ndimage.measurements.label, 'manual' segmenting by hand
+        """
         #start_time = time.time()
         if mode == "manual":
             counter = 1

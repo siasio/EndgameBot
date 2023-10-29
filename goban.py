@@ -1,9 +1,14 @@
+import threading
+import time
+
 import cloudpickle
-from PyQt5 import QtGui
-from PyQt5.QtCore import Qt, QPoint, QRectF, QPointF, QSettings
+from PyQt5 import QtGui, QtCore, QtWidgets
+from PyQt5.QtCore import Qt, QPoint, QRectF, QPointF, QSettings, QMutexLocker, QMutex, QTimer, QSize, QSizeF, QLineF
 from PyQt5.QtGui import QColor, QPainter, QPen, QBrush, QFont, QPalette, QKeySequence, QPolygonF
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QLabel, QHBoxLayout, QAction, QShortcut, QVBoxLayout, \
-    QPushButton, QFileDialog, QCheckBox, QRadioButton, QButtonGroup, QToolButton, QFrame
+    QPushButton, QFileDialog, QCheckBox, QRadioButton, QButtonGroup, QToolButton, QFrame, QGraphicsWidget, \
+    QGraphicsLinearLayout, QGridLayout, QGraphicsAnchorLayout, QGraphicsProxyWidget, QGraphicsView, \
+    QStyleOptionGraphicsItem, QGraphicsAnchor, QGraphicsItem
 from sgf_parser import Move
 import json
 import os
@@ -12,7 +17,7 @@ import pickle
 from policies.resnet_policy import TransferResnet, ResnetPolicyValueNet128
 import numpy as np
 
-from build_tree import PositionTree, LocalPositionNode
+from build_tree import PositionTree, LocalPositionNode, NextMovePlayer
 
 # Define the size of the Go board
 BOARD_SIZE = 19
@@ -35,6 +40,10 @@ for i in range(20):
     colors.append(QColor(new_r, new_g, new_b, 127))
 
 
+def qp(p):
+    return "({}, {})".format(p.x(), p.y())
+
+
 class GoBoard(QWidget):
     def __init__(self, parent=None, size=19, stone_radius=20, margin=30, b_border=2, w_border=1.5, b_radius=.92,
                  w_radius=.88, **kwargs):
@@ -55,14 +64,15 @@ class GoBoard(QWidget):
                             (self.size_y - 1) * self.stone_radius * 2 + self.margin * 2)
 
         self.last_color = WHITE
-        self.position_tree = PositionTree.from_a0pos(AnalyzedPosition())
+        self.position_tree = PositionTree.from_a0pos(AnalyzedPosition(), parent_widget=self)
+        # self.position_tree.goban = self
         self.reset_numbers()
-        self.show_segmentation = False
-        self.show_ownership = False
-        self.show_predicted_ownership = False
-        self.show_predicted_moves = False
-        self.show_black_scores = False
-        self.show_white_scores = False
+        # self.show_segmentation = False
+        # self.show_ownership = False
+        # self.show_predicted_ownership = False
+        # self.show_predicted_moves = False
+        # self.show_black_scores = False
+        # self.show_white_scores = False
         self.show_actual_move = False
         self.local_mask = [[1 for y in range(self.a0pos.pad_size)]
                            for x in range(self.a0pos.pad_size)]
@@ -73,9 +83,32 @@ class GoBoard(QWidget):
         self.stone_numbers = np.array([[None for y in range(self.size_y)] for x in range(self.size_x)])
         self.last_number = 0
 
+        # Add a GameTree widget
+        # self.game_tree = GameTree(self)
+        # self.game_tree.setGeometry(self.width() - 200, 0, 200, self.height())
+        # self.game_tree.setStyleSheet("QWidget { background-color: #D3D3D3; }")
+
+        self.mutex = QMutex()
+        self.paint_event_done = threading.Event()  # Initialize the event
+
+    def wait_for_paint_event(self):
+        with QMutexLocker(self.mutex):
+            self.paint_event_done.clear()
+        QTimer.singleShot(0, self.on_paint_event_finished)
+
+    def on_paint_event_finished(self):
+        with QMutexLocker(self.mutex):
+            self.paint_event_done.set()
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
+
+        if self.a0pos is None:
+            print("a0pos is None")
+            print("Current move", self.position_tree.current_node.move)
+            painter.end()
+            return
 
         def draw_text(x_coord, y_coord, text_to_draw):
             rect = painter.fontMetrics().boundingRect(text_to_draw)
@@ -223,7 +256,10 @@ class GoBoard(QWidget):
                         painter.setPen(Qt.NoPen)  # QPen(color, 0, Qt.SolidLine))
                         painter.drawRect(x - int(self.stone_radius), y - int(self.stone_radius),
                                          2 * int(self.stone_radius), 2 * int(self.stone_radius))
+        # Draw GameTree widget on the right side of the board
         painter.end()
+        if not self.paint_event_done:
+            QTimer.singleShot(0, self.on_paint_event_finished)
 
     @staticmethod
     def get_cross(size, x, y):
@@ -290,6 +326,8 @@ class GoBoard(QWidget):
             self.position_tree.update_a0pos_state()
             self.update()
 
+            self.position_tree.reset_tree()
+
     def add_mask(self, event):
         pos = event.pos()
         row, col = self.pixel_to_board(pos.x(), pos.y())
@@ -341,8 +379,9 @@ class GoBoard(QWidget):
     def clear_board(self):
         self.reset_numbers()
         del self.position_tree
-        self.position_tree = PositionTree.from_a0pos(AnalyzedPosition())
+        self.position_tree = PositionTree.from_a0pos(AnalyzedPosition(), parent_widget=self)
         self.position_tree.load_agent(self.agent)
+        # self.position_tree.goban = self
         self.update()
 
     def pixel_to_board(self, x, y):
@@ -360,7 +399,8 @@ class GoBoard(QWidget):
 
     def visualize_position(self, gtp_position):
         a0pos = AnalyzedPosition.from_gtp_log(gtp_position) if not self.from_pkl else AnalyzedPosition.from_jax(gtp_position)
-        self.position_tree = PositionTree.from_a0pos(a0pos)
+        self.position_tree = PositionTree.from_a0pos(a0pos, parent_widget=self)
+        # self.position_tree.goban = self
         # self.position_tree.update_a0pos_state()
         self.local_mask = self.a0pos.local_mask if self.a0pos.fixed_mask else None
         self.position_tree.load_agent(self.agent)
@@ -380,6 +420,231 @@ class GoBoard(QWidget):
             agent = agent.load_state_dict(loaded_agent)
         return agent
 
+# Write a class, inheriting from QWidget, which shows a game tree. The game tree will be a binary tree.
+# The root node should be represented on the top, and its children should be represented below it.
+
+
+class CurrentNodeKeeper:
+    def __init__(self, current_node=None):
+        self.current_node = current_node
+
+
+class GameTree(QGraphicsView):
+    def __init__(self, parent: GoBoard = None, position_tree=None, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.position_tree = position_tree
+        print("GameTree width", self.width(), "height", self.height())
+
+        # self.setMouseTracking(True)
+        self.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        self.main_scene = QtWidgets.QGraphicsScene(self)
+        self.setScene(self.main_scene)
+
+        l = QtWidgets.QGraphicsAnchorLayout()
+        w = QtWidgets.QGraphicsWidget()
+        self.main_scene.sceneRectChanged.connect(self.update_widget)
+        # self.horizontalScrollBar().valueChanged.connect(self.update_widget)
+        # self.verticalScrollBar().valueChanged.connect(self.update_widget)
+        w.setLayout(l)
+        self.main_scene.addItem(w)
+        self.main_widget = w
+        self.main_layout = l
+        self.node_dict = {}
+        self.current_node_keeper = CurrentNodeKeeper(None)
+
+    def create_tree(self):
+
+        def draw_node(node, parnt=None, corner=True, anchor1=None, anchor2=None, hor_spac=0.0, node_radius=40.0):
+
+            if node not in self.node_dict:
+                node_widget = NodeWidget(parent=self.main_widget, position_tree=self.position_tree, node=node, size=QSizeF(node_radius, node_radius), current_node=self.current_node_keeper)
+                self.node_dict[node] = node_widget
+
+                if parnt is None:
+                    draw_line = False
+                    parnt = self.main_layout
+                    second_anchor = Qt.AnchorTop
+                else:
+                    draw_line = True
+                    second_anchor = Qt.AnchorBottom
+                self.main_layout.addAnchor(
+                    node_widget,
+                    Qt.AnchorTop,
+                    parnt,
+                    second_anchor,
+                )
+
+                if corner:
+                    anch = self.main_layout.addAnchor(
+                        node_widget,
+                        anchor1,
+                        parnt,
+                        anchor2,
+                    )
+                    anch.setSpacing(hor_spac)
+                else:
+                    self.main_layout.addAnchor(
+                        node_widget,
+                        Qt.AnchorHorizontalCenter,
+                        parnt,
+                        Qt.AnchorHorizontalCenter,
+                    )
+                if draw_line:
+                    anchor_line = AnchorLine(node_widget, parnt)
+                    self.main_scene.addItem(anchor_line)
+
+            node_widget: NodeWidget = self.node_dict[node]
+            node_widget.update()
+
+            if node.children:
+                if len(node.children) == 1:
+                    draw_node(node.children[0], node_widget, corner=False, anchor1=Qt.AnchorTop, anchor2=Qt.AnchorBottom, hor_spac=hor_spac, node_radius=node_radius)
+                elif len(node.children) == 2:
+                    new_hor_spac = (hor_spac - node_radius) / 2
+                    draw_node(node.children[0], node_widget, corner=True, anchor1=Qt.AnchorLeft, anchor2=Qt.AnchorRight, hor_spac=new_hor_spac, node_radius=node_radius)
+                    draw_node(node.children[1], node_widget, corner=True, anchor1=Qt.AnchorRight, anchor2=Qt.AnchorLeft, hor_spac=new_hor_spac, node_radius=node_radius)
+
+        node_radius = self.main_widget.geometry().width() / 15
+
+        self.main_layout.setVerticalSpacing(self.main_widget.geometry().height() / 9 - node_radius)
+        self.current_node_keeper.current_node = self.position_tree.root
+
+        draw_node(
+            self.position_tree.root,
+            parnt=None,
+            corner=False,
+            anchor1=Qt.AnchorTop,
+            anchor2=Qt.AnchorTop,
+            hor_spac=.5 * self.main_widget.geometry().width() - 2 * node_radius,
+            node_radius=node_radius,
+        )
+
+    def clear_tree(self):
+        self.position_tree.go_to_node(self.position_tree.root)
+        self.position_tree.reset_tree()
+        # Delete all created NodeWidgets and AnchorLines from the scene
+        for node in self.node_dict:
+            if node.parent is not None:
+                self.main_scene.removeItem(self.node_dict[node])
+        for item in self.main_scene.items():
+            if isinstance(item, AnchorLine):
+                self.main_scene.removeItem(item)
+        self.create_tree()
+
+    def update_widget(self):
+        vp = self.viewport().mapFromParent(QtCore.QPoint())
+        tl = self.mapToScene(vp)
+        geo = self.main_widget.geometry()
+        geo.setTopLeft(tl)
+        self.main_widget.setGeometry(0, 0, self.contentsRect().width(), self.contentsRect().height())
+
+    def resizeEvent(self, event):
+        self.update_widget()
+        super().resizeEvent(event)
+
+    # def mouseMoveEvent(self, event):
+    #     pos = event.pos()
+    #     self.printStatus(pos)
+    #     super().mouseMoveEvent(event)
+    #
+    # def printStatus(self, pos):
+    #     pass
+        # msg = "Viewport Position: " + str(qp(pos))
+        # v = self.mapToScene(pos)
+        # v = QtCore.QPoint(v.x(), v.y())
+        # msg = msg + ",  Mapped to Scene: " + str(qp(v))
+        # v = self.mapToScene(self.viewport().rect()).boundingRect()
+        # msg = msg + ",  viewport Mapped to Scene: " + str(qp(v))
+        # v2 = self.mapToScene(QtCore.QPoint(0, 0))
+        # msg = msg + ",  (0, 0) to scene: " + qp(v2)
+        # self.messageChanged.emit(msg)
+
+
+def player_or_none(node):
+    if "B" in node.properties:
+        return "B"
+    elif "W" in node.properties:
+        return "W"
+    else:
+        return None
+
+
+class AnchorLine(QGraphicsItem):
+    def __init__(self, item1: QGraphicsItem, item2: QGraphicsItem):
+        super().__init__()
+        self.item1 = item1
+        self.item2 = item2
+        self.setZValue(-1)  # Ensure the line is drawn beneath the items
+
+    def boundingRect(self):
+        return QRectF()
+
+    def paint(self,
+          painter: QPainter,
+          option: QStyleOptionGraphicsItem,
+          widget: QWidget | None = ...) -> None:
+        if self.item1.scene() is not None and self.item2.scene() is not None:
+            first_pos = self.item1.scenePos()
+            second_pos = self.item2.scenePos()
+            line = QLineF(
+                first_pos.x() + self.item1.size().width() / 2,
+                first_pos.y(),
+                second_pos.x() + self.item2.size().width() / 2,
+                second_pos.y() + self.item1.size().height(),
+            )
+            painter.setPen(QPen(Qt.black, 1, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+            painter.drawLine(line)
+
+
+class NodeWidget(QGraphicsWidget):
+    def __init__(self, parent=None, position_tree: PositionTree = None, node: LocalPositionNode = None, size=QSizeF(20, 20), current_node=None):
+        super().__init__(parent)
+        self.setAcceptHoverEvents(True)
+        self.node = node
+        self.position_tree = position_tree
+
+        self.setMinimumSize(size)
+        self.setMaximumSize(size)
+
+        player_colors = {None: Qt.green, 'B': Qt.black, 'W': Qt.white}
+        player_anticolors = {None: Qt.green, 'B': Qt.white, 'W': Qt.black}
+
+        pl = player_or_none(node)
+        self.color = player_colors[pl]
+        self.anticolor = player_anticolors[pl]
+        self.draw_ellipse = pl is not None
+
+        self.setCursor(Qt.PointingHandCursor)
+        self.setToolTip(str(node.move))
+        self.current_node_keeper = current_node
+
+    def paint(self,
+              painter: QPainter,
+              option: QStyleOptionGraphicsItem,
+              widget: QWidget | None = ...) -> None:
+        brush = QtGui.QBrush()
+        brush.setColor(QtGui.QColor(self.color))
+        brush.setStyle(Qt.SolidPattern)
+
+        # draw a circle instead of rectangle
+        painter.setBrush(brush)
+        anticolor = QtGui.QColor(self.anticolor)
+        pen_thickness = 1
+        if self.current_node_keeper.current_node == self.node:
+            anticolor = QtGui.QColor("red")
+            pen_thickness = 3
+        painter.setPen(QtGui.QPen(anticolor, pen_thickness, Qt.SolidLine))
+        # painter.setPen(anticolor)
+        if self.draw_ellipse:
+            painter.drawEllipse(self.boundingRect())
+        else:
+            painter.drawRect(self.boundingRect())
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.position_tree.go_to_node(self.node)
+            self.current_node_keeper.current_node = self.node
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -396,11 +661,8 @@ class MainWindow(QMainWindow):
 
         # create the widgets
         self.go_board = GoBoard(self, size=int(BOARD_SIZE), stone_radius=int(intersection_size), margin=int(margin_size))
-        # picture_widget = QLabel()  # replace this with your own widget
-        # create a layout and add the widgets to it
-        # main_layout = QHBoxLayout()
-        # main_layout.addWidget(picture_widget)
-        # main_layout.addWidget(self.go_board)
+        self.game_tree = GameTree(self.go_board, self.go_board.position_tree)
+        self.game_tree.setStyleSheet("QWidget { background-color: #B19886; }")
 
         self.move_buttons = QButtonGroup()
         self.move_buttons.setProperty("name", "move choice")
@@ -545,6 +807,7 @@ class MainWindow(QMainWindow):
 
         main_layout = QHBoxLayout()
         main_layout.addWidget(self.go_board, 3)
+        main_layout.addWidget(self.game_tree, 1)
         main_layout.addLayout(buttons_layout, 1)
 
         central_widget = QWidget(self)
@@ -603,10 +866,11 @@ class MainWindow(QMainWindow):
             self.visualize_position()
 
     def set_up_position(self):
-        # self.set_up_layout.setVisible(not self.set_up_layout.isVisible())
         if self.set_up_button.isChecked():
+            self.game_tree.clear_tree()
             self.set_up_button.setText("Finish and analyze")
             self.set_up_frame.show()
+            self.update_buttons()
         else:
             self.set_up_button.setText("Set up position")
             self.set_up_frame.hide()
@@ -644,9 +908,16 @@ class MainWindow(QMainWindow):
         self.go_board.update()
 
     def calculate_score(self):
-        self.go_board.position_tree.current_node.calculate_score_and_ownership()
+        # self.go_board.position_tree.build_tree()  # current_node.calculate_score_and_ownership()
         # score = self.go_board.position_tree.current_node.calculated_score
         # ownership = self.go_board.position_tree.current_node.calculated_ownership
+        self.thread = self.go_board.position_tree
+        self.thread.update_signal.connect(self.update_tree)
+        self.thread.start()
+
+    def update_tree(self):
+        self.go_board.update()
+        self.game_tree.create_tree()
         self.update_buttons()
 
     def select_directory(self):
@@ -678,16 +949,23 @@ class MainWindow(QMainWindow):
             # self.update_pinned_directories(selected_directory)
 
     def update_buttons(self):
-        w_res = self.go_board.position_tree.current_node.w_score
-        b_res = self.go_board.position_tree.current_node.b_score
-        diff = b_res - w_res
-        self.label.setText(f'Difference {abs(diff):.2f}')
+        diff = self.go_board.position_tree.current_node.temperature  # b_res - w_res
         black_move_prob = self.go_board.a0pos.black_move_prob
         white_move_prob = self.go_board.a0pos.white_move_prob
         no_move_prob = self.go_board.a0pos.no_move_prob
-        self.black_prob_label.setText(f"Black move prob: {black_move_prob:.2f}")
-        self.white_prob_label.setText(f"White move prob: {white_move_prob:.2f}")
-        self.no_move_prob_label.setText(f"No move prob: {no_move_prob:.2f}")
+        next_pl = self.go_board.position_tree.current_node.next_move_player
+        if next_pl == NextMovePlayer.both:
+            self.label.setText(f'Move value: {abs(diff) - 2.0:.2f} points')
+        elif next_pl == NextMovePlayer.none:
+            self.label.setText(f'Finished position')
+        elif next_pl == NextMovePlayer.black or next_pl == NextMovePlayer.white:
+            self.label.setText(f'Sente - {next_pl.name} plays next')
+        else:
+            self.label.setText(f'Press "Calculate temperature"')
+            print("Next player", self.go_board.position_tree.current_node.next_move_player)
+        self.black_prob_label.setText(f"Black move prob: {round(100 * black_move_prob)}%")
+        self.white_prob_label.setText(f"White move prob: {round(100 * white_move_prob)}%")
+        self.no_move_prob_label.setText(f"No move prob: {round(100 * no_move_prob)}%")
 
     def visualize_position(self):
         current_position = self.positions[self.current_position_index]

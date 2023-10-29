@@ -200,22 +200,23 @@ class BaseGame(Generic[T]):
         if ko_or_snapback and len(self.last_capture) == 1 and not ignore_ko and False:  # SF: always ignore ko
             raise IllegalMoveException("Ko")
         self.prisoners += self.last_capture
-
+        # SF: Always allow suicide
         # suicide: check rules and throw exception if needed
         if -1 not in neighbours(self.chains[this_chain]):
-            rules = self.rules
-            if len(self.chains[this_chain]) == 1:  # even in new zealand rules, single stone suicide is not allowed
-                raise IllegalMoveException("Single stone suicide")
-            elif (isinstance(rules, str) and rules in ["tromp-taylor", "new zealand"]) or (
-                isinstance(rules, dict) and rules.get("suicide", False)
-            ) or True:  # SF: Always allow suicide
+            # rules = self.rules
+            # if len(self.chains[this_chain]) == 1:  # even in new zealand rules, single stone suicide is not allowed
+            #     raise IllegalMoveException("Single stone suicide")
+            # elif (isinstance(rules, str) and rules in ["tromp-taylor", "new zealand"]) or (
+            #     isinstance(rules, dict) and rules.get("suicide", False)
+            # ):
+            if True:
                 self.last_capture += self.chains[this_chain]
                 for om in self.chains[this_chain]:
                     self.board[om.coords[1]][om.coords[0]] = -1
                 self.chains[this_chain] = []
                 self.prisoners += self.last_capture
-            else:  # suicide not allowed by rules
-                raise IllegalMoveException("Suicide")
+            # else:  # suicide not allowed by rules
+            #     raise IllegalMoveException("Suicide")
 
     # Play a Move from the current position, raise IllegalMoveException if invalid.
     def play(self, move: Move, ignore_ko: bool = False):
@@ -224,11 +225,11 @@ class BaseGame(Generic[T]):
             raise IllegalMoveException(f"Move {move} outside of board coordinates")
         try:
             self._validate_move_and_update_chains(move, ignore_ko)
-        except IllegalMoveException:
+        except IllegalMoveException as e:
             self._calculate_groups()
-            print(move)
-            print('Current move', move.coords)
-            raise
+            # print(move)
+            # print('Current move', move.coords)
+            raise e
         with self._lock:
             played_node = self.current_node.play(move)
             self.current_node = played_node
