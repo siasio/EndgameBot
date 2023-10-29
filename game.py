@@ -197,7 +197,7 @@ class BaseGame(Generic[T]):
                 for om in self.chains[c]:
                     self.board[om.coords[1]][om.coords[0]] = -1
                 self.chains[c] = []
-        if ko_or_snapback and len(self.last_capture) == 1 and not ignore_ko and False:  # SF: always ignore ko
+        if ko_or_snapback and len(self.last_capture) == 1 and not ignore_ko:
             raise IllegalMoveException("Ko")
         self.prisoners += self.last_capture
         # SF: Always allow suicide
@@ -224,10 +224,11 @@ class BaseGame(Generic[T]):
         if not move.is_pass and not (0 <= move.coords[0] < board_size_x and 0 <= move.coords[1] < board_size_y):
             raise IllegalMoveException(f"Move {move} outside of board coordinates")
         try:
+            # print(move, ignore_ko)
             self._validate_move_and_update_chains(move, ignore_ko)
         except IllegalMoveException as e:
             self._calculate_groups()
-            # print(move)
+            # print(move, e)
             # print('Current move', move.coords)
             raise e
         with self._lock:

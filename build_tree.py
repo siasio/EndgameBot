@@ -37,8 +37,28 @@ class LocalPositionNode(GameNode):
         self.current_ko_stage = 1
         self.continuation: LocalPositionNode = None
         self.answer: LocalPositionNode = None
-        self.ko_starting_node: LocalPositionNode = None
-        self.ko_stopping_node: LocalPositionNode = None
+        self.ko_starting_node_parent: LocalPositionNode = None
+        self.ko_stopping_node_sibling: LocalPositionNode = None
+
+    @property
+    def ko_starting_node(self):
+        if self.ko_starting_node_parent is None:
+            return None
+        return self.ko_starting_node_parent.continuation
+
+    @property
+    def ko_stopping_node(self):
+        if self.ko_stopping_node_sibling is None or self.ko_stopping_node_sibling.parent is None:
+            print("Ko stopping node sibling or its parent is None, this shouldn't ever happen!")
+            return None
+        if self.ko_stopping_node_sibling.parent.continuation is None or self.ko_stopping_node_sibling.parent.answer is None:
+            print("Ko stopping node sibling parent continuation or answer is None")
+            return None
+
+        if self.ko_stopping_node_sibling.player == self.ko_stopping_node_sibling.parent.continuation.player:
+            return self.ko_stopping_node_sibling.parent.answer
+        else:
+            return self.ko_stopping_node_sibling.parent.continuation
 
     @property
     def unfinished_children(self):
@@ -82,8 +102,9 @@ class LocalPositionNode(GameNode):
             # Some of the intersections might have ownership close to zero due to seki
             undecided_intersections = undecided_intersections * (abs(local_ownership) > 0.2)
             if np.sum(undecided_intersections) >= 1:
-                print("Position seems to be finished but some intersections have uncertain evaluation:")
-                print((10 * local_ownership).astype(int))
+                pass
+                # print("Position seems to be finished but some intersections have uncertain evaluation:")
+                # print((10 * local_ownership).astype(int))
             return np.round(local_ownership).astype(int)
         else:
             return self.a0pos.predicted_ownership * self.a0pos.local_mask
@@ -243,21 +264,27 @@ class LocalPositionNode(GameNode):
                     finished_calculation = False
                 scores.append(child.calculated_score)
                 ownerships.append(child.calculated_ownership)
-            print("Scores", scores)
+            # print("Scores", scores)
             self.finished_calculation = finished_calculation
-            if self.total_ko_stage > 0:
-                scores = [self.ko_starting_node.calculated_score, self.ko_stopping_node.calculated_score]
-                ownerships = [self.ko_starting_node.calculated_ownership, self.ko_stopping_node.calculated_ownership]
-                factor = self.current_ko_stage / (self.total_ko_stage + 2)
-            else:
-                factor = 1 / len(scores)
-            self.calculated_score = np.sum(scores) * factor
-            self.calculated_ownership = np.sum(ownerships, axis=0) * factor
-            if len(scores) == 2:
-                self.temperature = abs(scores[0] - scores[1]) * 2 * factor
-            else:
-                print(f"Got {len(scores)} child(ren), setting temperature to 0.0")
+            if len(scores) == 1 and self.total_ko_stage == 0:
+                self.calculated_score = scores[0]
+                self.calculated_ownership = ownerships[0]
                 self.temperature = 0.0
+
+            else:
+                if self.total_ko_stage > 0:
+                    print(f"Ko stage ({self.move}): {self.current_ko_stage}/{self.total_ko_stage + 2}")
+                    scores = [self.ko_starting_node.calculated_score, self.ko_stopping_node.calculated_score]
+                    ownerships = [self.ko_starting_node.calculated_ownership, self.ko_stopping_node.calculated_ownership]
+                    factor = self.current_ko_stage / (self.total_ko_stage + 2)
+                    print(f"Scores: {self.ko_starting_node.move} {scores[0]:.03f} - {self.ko_stopping_node.move} {scores[1]:.03f}, factor: {factor:.03f}")
+                else:
+                    factor = 1 / len(scores)
+                    print(f"No ko ({self.move})")
+                self.calculated_score = scores[1] * factor + scores[0] * (1 - factor)
+                self.calculated_ownership = np.sum(ownerships[1], axis=0) * factor + np.sum(ownerships[0], axis=0) * (1 - factor)
+                print(f"Calculated temperature: {self.temperature:.03f}")
+                self.temperature = abs(scores[0] - scores[1]) * 2 / (self.total_ko_stage + 2)
 
 
 class PositionTree(BaseGame[LocalPositionNode], QThread):
@@ -293,7 +320,7 @@ class PositionTree(BaseGame[LocalPositionNode], QThread):
 
     def go_to_node(self, node: LocalPositionNode):
         moves_to_play = []
-        print("Going to node", node.move)
+        # print("Going to node", node.move)
         while node.parent is not None:
             moves_to_play.append(node.move)
             node = node.parent
@@ -312,7 +339,7 @@ class PositionTree(BaseGame[LocalPositionNode], QThread):
                 assert len(self.current_node.children) == 0, "Calculations are finished for all children but not for the parent!"
                 return
             # Pick child for which expanded_tree_depth is the lowest
-            print([child.move for child in self.current_node.unfinished_children])
+            # print([child.move for child in self.current_node.unfinished_children])
             node = min(self.current_node.unfinished_children, key=lambda x: x.expanded_tree_depth)
             self.play(node.move)
 
@@ -332,44 +359,47 @@ class PositionTree(BaseGame[LocalPositionNode], QThread):
                 continue
             try:
                 self.play(move, ignore_ko=False)
-                # TODO: Decide what to do with the root node which doesn't have a player defined
-                if self.current_node.player == self.current_node.parent.player:
+                last_player = self.current_node.parent.player if self.current_node.parent is not None else "W"
+                if self.current_node.player == last_player:
                     self.current_node.parent.continuation = self.current_node
                 else:
                     self.current_node.parent.answer = self.current_node
                 self.undo()
             except game.IllegalMoveException as e:
+                print("Illegal move!!", e)
                 # Check if IllegalMoveException was raised with text "Ko"
                 if "Ko" in str(e):
-                    # self.play(move, ignore_ko=True)
                     parent_ko_stage = self.current_node.parent.total_ko_stage if self.current_node.parent is not None else 0
                     node = self.current_node
                     for i in range(parent_ko_stage):
-                        # if i == parent_ko_stage:
-                        #     ko_root_node = node.
-                        #     break
                         try:
                             node = node.parent
                         except AttributeError:
                             raise AttributeError("Ko stage is higher than the tree depth! Perhaps, the problem is the ko starting in the first move?")
-                        if i == parent_ko_stage:
-                            ko_stopping_node = node.continuation
+                        # if i == parent_ko_stage:
+                    ko_stopping_node_sibling = node
+                    # ko_stopping_node_color = node.move.opponent if node.move is not None else "B"
                     node = self.current_node
-                    for i in range(parent_ko_stage):
+                    for i in range(parent_ko_stage + 1):
                         node.total_ko_stage = parent_ko_stage + 1
                         node.current_ko_stage = i + 1
-                        node.ko_starting_node = self.current_node.continuation
-                        node.ko_stopping_node = ko_stopping_node
+                        node.ko_starting_node_parent = self.current_node
+                        node.ko_stopping_node_sibling = ko_stopping_node_sibling
+                        print(node.ko_starting_node_parent.move)
+                        print(node.ko_stopping_node_sibling.move)
                         node = node.parent
+                    print("Ko stage", self.current_node.total_ko_stage)
                 else:
-                    print(e)
+                    stones = self.get_position()
+                    print(self.position_as_string(stones))
+                    raise(e)
                 continue
         # print('Children', ' '.join([str(child.move) for child in self.current_node.children]))
 
     def backup(self):
         while True:
             self.current_node.set_score_and_ownership()
-            print(f'{self.current_node.move} calculated score: {self.current_node.calculated_score:.03f}')
+            # print(f'{self.current_node.move} calculated score: {self.current_node.calculated_score:.03f}')
             if self.current_node.parent is None:
                 break
             self.undo()
@@ -418,10 +448,10 @@ class PositionTree(BaseGame[LocalPositionNode], QThread):
 
     def initialize_current_node(self, local_mask):
         if self.current_node.is_initialized:
-            print(f"Already initialized node {self.current_node.move}")
+            # print(f"Already initialized node {self.current_node.move}")
             assert self.current_node.a0pos is not None, "Node is initialized but a0pos is None"
             return
-        print(f"Initializing node {self.current_node.move}")
+        # print(f"Initializing node {self.current_node.move}")
         self.current_node.a0pos = AnalyzedPosition()
         self.current_node.a0pos.local_mask = local_mask
         self.current_node.game = self

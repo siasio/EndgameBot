@@ -433,7 +433,6 @@ class GameTree(QGraphicsView):
     def __init__(self, parent: GoBoard = None, position_tree=None, **kwargs):
         super().__init__(parent, **kwargs)
         self.position_tree = position_tree
-        print("GameTree width", self.width(), "height", self.height())
 
         # self.setMouseTracking(True)
         self.setAlignment(Qt.AlignTop | Qt.AlignLeft)
@@ -955,14 +954,16 @@ class MainWindow(QMainWindow):
         no_move_prob = self.go_board.a0pos.no_move_prob
         next_pl = self.go_board.position_tree.current_node.next_move_player
         if next_pl == NextMovePlayer.both:
-            self.label.setText(f'Move value: {abs(diff) - 2.0:.2f} points')
+            self.label.setText(f'Move value: {abs(diff) - 2.0:.2f} points\n'
+                               f'Local score: {self.go_board.position_tree.current_node.calculated_score:.2f}')
         elif next_pl == NextMovePlayer.none:
-            self.label.setText(f'Finished position')
+            self.label.setText(f'Finished position\n'
+                               f'Local score: {self.go_board.position_tree.current_node.calculated_score:.2f}')
         elif next_pl == NextMovePlayer.black or next_pl == NextMovePlayer.white:
-            self.label.setText(f'Sente - {next_pl.name} plays next')
+            self.label.setText(f'Sente - {next_pl.name} plays next\n'
+                               f'Local score: {self.go_board.position_tree.current_node.calculated_score:.2f}')
         else:
             self.label.setText(f'Press "Calculate temperature"')
-            print("Next player", self.go_board.position_tree.current_node.next_move_player)
         self.black_prob_label.setText(f"Black move prob: {round(100 * black_move_prob)}%")
         self.white_prob_label.setText(f"White move prob: {round(100 * white_move_prob)}%")
         self.no_move_prob_label.setText(f"No move prob: {round(100 * no_move_prob)}%")
