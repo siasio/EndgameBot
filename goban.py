@@ -76,7 +76,7 @@ class GoBoard(QWidget):
         self.show_actual_move = False
         self.local_mask = [[1 for y in range(self.a0pos.pad_size)]
                            for x in range(self.a0pos.pad_size)]
-        self.agent = self.load_agent(os.path.join(os.getcwd(), 'a0-jax', "trained.ckpt"))
+        self.agent = self.load_agent(os.path.join(os.getcwd(), 'a0-jax', "trained_2023-08.ckpt"))
         self.position_tree.load_agent(self.agent)
         self.from_pkl = False
         self.default_event_handler = self.handle_default_event
@@ -725,6 +725,7 @@ class MainWindow(QMainWindow):
         self.calculate_button.clicked.connect(self.calculate_score)
         self.calculate_button.setStyleSheet("QPushButton {"
                                              "background-color: #D3D3D3;}")
+        self.calculate_button.hide()
         buttons_layout.addWidget(self.calculate_button)
 
         buttons_layout.addStretch()
@@ -869,6 +870,7 @@ class MainWindow(QMainWindow):
             self.game_tree.clear_tree()
             self.set_up_button.setText("Finish and analyze")
             self.set_up_frame.show()
+            self.set_up_group.buttons()[0].setChecked(True)
             self.update_buttons()
         else:
             self.set_up_button.setText("Set up position")
@@ -878,6 +880,7 @@ class MainWindow(QMainWindow):
             self.go_board.a0pos.analyze_pos(self.go_board.local_mask, self.go_board.agent)
             self.update_buttons()
             self.go_board.update()
+            self.calculate_score()
 
     def add_black_stones(self):
         if self.add_black_button.isChecked():
@@ -963,7 +966,7 @@ class MainWindow(QMainWindow):
             self.label.setText(f'Sente - {next_pl.name} plays next\n'
                                f'Local score: {self.go_board.position_tree.current_node.calculated_score:.2f}')
         else:
-            self.label.setText(f'Press "Calculate temperature"')
+            self.label.setText(f'Set up position and analyze')
         self.black_prob_label.setText(f"Black move prob: {round(100 * black_move_prob)}%")
         self.white_prob_label.setText(f"White move prob: {round(100 * white_move_prob)}%")
         self.no_move_prob_label.setText(f"No move prob: {round(100 * no_move_prob)}%")
