@@ -18,8 +18,6 @@ To use a GUI, run `goban.py`. Press "Set up position" and put Black and White st
 
 There is a basic code for managing kos (including multi-stage) which stops the algorithm from infinite tree expansion, and calculates a move value based on the initial and final position of a ko.
 ![Screenshot from 2023-11-01 20-03-23](https://github.com/siasio/EndgameBot/assets/39811817/8e7b4da2-6b2a-4ed6-9974-97939db5a516)
-[//]: # ![Screenshot from 2023-11-01 20-03-51](https://github.com/siasio/EndgameBot/assets/39811817/fcb77236-16cf-4957-9305-700abe04bba1)
-[//]: # ![Screenshot from 2023-11-01 20-04-04](https://github.com/siasio/EndgameBot/assets/39811817/155b21c6-009a-4f2d-840f-ea723a6e2927)
 
 Currently the tree is expanded using very simple heuristics. In each position, only one move for black and one move for white are taken into account (the top choices of the neural network). To assess whether the network believes that the previous move is sente, I use a 10% threshold: if the sum of softmaxed moves of one color is below 10%, then I don't take that color into account when expanding the current node. Of course, this algorithm is imperfect, and it leads to wrong assessments from time to time. An example below shows a position in which a tree for a simple position is expanded way too much because of not detecting some sente moves. The currently displayed position after two moves should obviously be judged as Black's sente. However, Black's move probability being at 12%, the tree is expanded with both White's and Black's move:
 ![image](https://github.com/siasio/EndgameBot/assets/39811817/c8c67816-0bff-4fba-875c-74127f8f6dfa)
