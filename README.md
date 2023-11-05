@@ -39,10 +39,10 @@ To use a GUI, run `visualize.py`. Press "Set up position" and put Black and Whit
  - a value of move calculated with Japanese rules (which is twice the local temperature); something is incorrect when calculating values of reverse sente moves - should be revised
 
 There is a basic code for managing kos (including multi-stage) which stops the algorithm from infinite tree expansion, and calculates a move value based on the initial and final position of a ko.
-![Screenshot from 2023-11-01 20-03-23](https://github.com/siasio/EndgameBot/assets/39811817/8e7b4da2-6b2a-4ed6-9974-97939db5a516)
+![image](https://github.com/siasio/EndgameBot/assets/39811817/355dda7a-4826-4ef1-abc1-52cf44e0434b)
 
 Currently the tree is expanded using very simple heuristics. In each position, only one move for black and one move for white are taken into account (the top choices of the neural network). To assess whether the network believes that the previous move is sente, I use a 10% threshold: if the sum of softmaxed moves of one color is below 10%, then I don't take that color into account when expanding the current node. Of course, this algorithm is imperfect, and it leads to wrong assessments from time to time. An example below shows a position in which a tree for a simple position is expanded way too much because of not detecting some sente moves. The currently displayed position after two moves should obviously be judged as Black's sente. However, Black's move probability being at 12%, the tree is expanded with both White's and Black's move:
-![image](https://github.com/siasio/EndgameBot/assets/39811817/c8c67816-0bff-4fba-875c-74127f8f6dfa)
+![image](https://github.com/siasio/EndgameBot/assets/39811817/667a16c3-e298-4f1f-90da-fc20516b48ad)
 
 ## Methods
 
