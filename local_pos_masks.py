@@ -1,14 +1,11 @@
 from sgf_parser import Move
 import numpy as np
 import jax.numpy as jnp
-import jax
+from jax.nn import softmax
 from game import BaseGame, KaTrainSGF
 from utils import stack_last_state
 import time
-import cv2
 import random
-from scipy.ndimage.measurements import label
-#from train_agent import TrainingOwnershipExample
 import os
 
 #os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = '.79'
@@ -218,7 +215,7 @@ class AnalyzedPosition:
             self.predicted_black_next_moves = np.array(action_logits[..., 1])
             self.predicted_white_next_moves = np.array(action_logits[..., 0])
         else:
-            action_logits = jax.nn.softmax(action_logits, axis=-1)
+            action_logits = softmax(action_logits, axis=-1)
             black_next_moves = np.array(action_logits[self.num_intersections:2 * self.num_intersections]).reshape(self.shape)
             white_next_moves = np.array(action_logits[:self.num_intersections]).reshape(self.shape)
             self.predicted_black_next_moves = black_next_moves if self.color_to_play != -1 else white_next_moves
@@ -437,10 +434,12 @@ class AnalyzedPosition:
         ownership_to_use = np.logical_and((self.ownership == 0), (self.board_mask != 0))
         ownership_to_use = ownership_to_use.astype(np.uint8)
         if mode == "scipy":
+            from scipy.ndimage.measurements import label
             structure = np.ones((3, 3), dtype=np.int)
             labeled, self.segmentation = label(ownership_to_use, structure)
 
         elif mode == "cv":
+            import cv2
             #ownership_to_use = cv2.dilate(ownership_to_use, kernel_small)
             num_labels, self.segmentation = cv2.connectedComponents(ownership_to_use)
         #end_time = time.time()

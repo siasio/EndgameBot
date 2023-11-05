@@ -3,15 +3,37 @@ A codebase for Stanisław Frejlak's master's thesis "Deep learning and combinato
 
 ## Installation
 
-Detailed instructions will be added soon. Requirements are listed in the `requirements.txt` file. Setting up the environment might be difficult on Windows because of `jax` library. To build `jax` under Windows, use this [repo](https://github.com/cloudhan/jax-windows-builder). Install `jaxlib` with CUDA to utilize your GPU. Make sure that you have required version of `opax`, `optax`, `chex`, `jax` and `jaxlib` libraries.
+Clone this repository to your local machine. The repository uses one submodule: [my fork](https://github.com/siasio/a0-jax) of the `a0-jax` [repository](https://github.com/NTT123/a0-jax). If after cloning the current repository, the `a0-jax` directory remains empty, navigate to the current repository root and run: `git clone https://github.com/siasio/a0-jax`.
 
-Make sure that you have `opencv-python-headless` and not `opencv-python` installed. Otherwise, a GUI might not run.
+The project uses relative imports from the `a0-jax` submodule, so you need to make sure that they are recognized by Python. In PyCharm, you can achieve it by right-clicking on the directory and choosing `Mark Directory as: Sources Root`. In terminal, export the `a0-jax` directory path to the `PYTHONPATH`.
+
+Find a fine-tuned Endgame Bot in the release section of this repository. Download it to the `a0-jax` directory.
+
+To install libraries required for using the bot run:
+
+`pip install -r vis_requirements.txt`
+
+If your computer has a dedicated GPU, you could benefit from installing `jax` with GPU support. For Linux, follow instructions from the jax documentation [here](https://jax.readthedocs.io/en/latest/installation.html). Windows version can be installed from unofficial community builds [here](https://github.com/cloudhan/jax-windows-builder).
+
+Note that the network is quite light so `jax` CPU version is enough for using it.
+
+If you want to run the training loop by yourself, more libraries are required. Install them with:
+
+`pip install -r train_requirements.txt`
+
+For training, it's recommended to use a machine with a dedicated GPU, and to install `jax` with GPU support.
+
+### Known issues
+
+Issues might arise if you use versions of `optax` or `chex` other than specified in the requirements file. Make sure that you have the correct versions installed.
+
+Windows installation of GPU supported `jax` version from the community builds might prove impossible on specific computers. In such case, use the CPU version.
+
+In `train_requirements.txt`, `opencv-python-headless` is listed. If you have `opencv-python` instead, you might run into issues with the visualization tool because of a conflict between `PyQt` and `OpenCV` libraries.
 
 ## Usage
 
-Find a fine-tuned Endgame Bot in the realese section of this repository. Download it to the `a0-jax` directory.
-
-To use a GUI, run `goban.py`. Press "Set up position" and put Black and White stones on the board. When "Black" is selected, you can add Black stones with mouse left-click, and White stones with right-click. When you set the position, press "Mask" and select intersections which count into the local position. After you press "Finish and analyze" a game tree for the local position will be created, and you can view it on the right-side panel. To the right of the panel some statistics will be displayed: 
+To use a GUI, run `visualize.py`. Press "Set up position" and put Black and White stones on the board. When "Black" is selected, you can add Black stones with mouse left-click, and White stones with right-click. When you set the position, press "Mask" and select intersections which count into the local position. After you press "Finish and analyze" a game tree for the local position will be created, and you can view it on the right-side panel. To the right of the panel some statistics will be displayed: 
  - a probability that White or Black gets the next move in the local position - ideally, we would like it to be 50-50 for positions with gote moves, 100-0 for positions with a sente move of one of the players, or if the previous move was sente, and 0-0 for finished positions
  - a local result calculated with Chinese rules, i.e. an expected difference between the number of Black's and White's intersections within the masked region
  - a value of move calculated with Japanese rules (which is twice the local temperature); something is incorrect when calculating values of reverse sente moves - should be revised

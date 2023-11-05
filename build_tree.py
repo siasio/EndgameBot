@@ -12,8 +12,6 @@ from typing import TypeVar, Generic, Tuple
 from enum import Enum
 from utils import stack_last_state, add_new_state, add_new_stack_previous_state
 
-import jax.numpy as jnp
-
 
 class NextMovePlayer(Enum):
     none = "none"
