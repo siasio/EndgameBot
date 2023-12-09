@@ -5,7 +5,7 @@ import time
 from tqdm import tqdm
 from typing import Dict
 # import yaml
-from goban import GoBoard, QApplication, MainWindow
+from visualize import GoBoard, QApplication, MainWindow
 
 RESPONSE_STR = 'Response: '
 REQUEST_STR = 'Request: '
