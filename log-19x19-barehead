@@ -1,0 +1,1138 @@
+/home/test/PycharmProjects/a0-jax/venv/bin/python3.10 /home/test/PycharmProjects/EndgameBot/a0-jax/train_agent.py --game-class=games.go_game.GoBoard9x9 --agent-class=policies.resnet_policy.ResnetPolicyValueNet128 --root_dir=/home/test/PycharmProjects/EndgameBot/a0-jax/ --ckpt-filename=new_ckpt.ckpt
+Cores: [gpu(id=0)]
+Loading weights at new_ckpt.ckpt
+  time 11:49:48
+Unpacked: [18, 2, 12, 6, 5, 7, 10, 1, 8, 3, 17, 16, 13, 9, 15, 11, 4, 14, 20, 19]
+Iteration 1
+  test model
+  test top 1 acc 0.001  test ownership MSE 0.0163  learning rate 1.0e-02  backbone multiplier 0.0  time 11:50:34
+  time 11:50:37
+  train model
+Iteration 2
+  time 11:51:20
+  train model
+Iteration 3
+  time 11:52:27
+  train model
+Iteration 4
+  time 11:53:05
+  train model
+Iteration 5
+  time 11:53:45
+  train model
+Iteration 6
+  test model
+  ownership loss 1.881  policy loss 3.796  test top 1 acc 0.212  test ownership MSE 0.0050  learning rate 1.0e-02  backbone multiplier 0.0  time 11:54:49
+  time 11:54:54
+  train model
+Iteration 7
+  time 11:55:42
+  train model
+Iteration 8
+  time 11:57:49
+  train model
+Iteration 9
+  time 11:58:31
+  train model
+Iteration 10
+  time 11:59:58
+  train model
+Iteration 11
+  test model
+  ownership loss 1.739  policy loss 3.506  test top 1 acc 0.214  test ownership MSE 0.0044  learning rate 1.0e-02  backbone multiplier 0.0  time 12:01:48
+  time 12:02:12
+  train model
+Iteration 12
+  time 12:04:48
+  train model
+Iteration 13
+  time 12:07:10
+  train model
+Iteration 14
+  time 12:07:43
+  train model
+Iteration 15
+  time 12:08:40
+  train model
+Iteration 16
+  test model
+  ownership loss 1.599  policy loss 3.385  test top 1 acc 0.216  test ownership MSE 0.0043  learning rate 1.0e-02  backbone multiplier 0.0  time 12:12:26
+  time 12:12:34
+  train model
+Iteration 17
+  time 12:13:10
+  train model
+Iteration 18
+  time 12:13:51
+  train model
+Iteration 19
+  time 12:14:29
+  train model
+Iteration 20
+  time 12:15:23
+  train model
+Iteration 21
+  test model
+  ownership loss 1.607  policy loss 3.354  test top 1 acc 0.218  test ownership MSE 0.0042  learning rate 1.0e-02  backbone multiplier 0.0  time 12:18:27
+  time 12:18:39
+  train model
+Iteration 22
+  time 12:20:11
+  train model
+Iteration 23
+  time 12:22:58
+  train model
+Iteration 24
+  time 12:23:43
+  train model
+Iteration 25
+  time 12:24:32
+  train model
+Iteration 26
+  time 12:25:49
+  train model
+Iteration 27
+  time 12:26:25
+  train model
+Iteration 28
+  time 12:27:08
+  train model
+Iteration 29
+  time 12:27:44
+  train model
+Iteration 30
+  time 12:28:25
+  train model
+Iteration 31
+  time 12:29:20
+  train model
+Iteration 32
+  time 12:31:22
+  train model
+Iteration 33
+  time 12:32:01
+  train model
+Iteration 34
+  time 12:33:24
+  train model
+Iteration 35
+  time 12:34:51
+  train model
+Iteration 36
+  time 12:36:56
+  train model
+Iteration 37
+  time 12:37:51
+  train model
+Iteration 38
+  time 12:40:51
+  train model
+Iteration 39
+  time 12:43:47
+  train model
+Iteration 40
+  time 12:46:53
+  train model
+Iteration 41
+  test model
+  ownership loss 1.340  policy loss 2.645  test top 1 acc 0.269  test ownership MSE 0.0040  learning rate 1.0e-02  backbone multiplier 0.0  time 12:49:28
+  time 12:49:52
+  train model
+Iteration 42
+  time 12:53:01
+  train model
+Iteration 43
+  time 12:54:26
+  train model
+Iteration 44
+  time 12:55:10
+  train model
+Iteration 45
+  time 12:56:41
+  train model
+Iteration 46
+  time 12:59:37
+  train model
+Iteration 47
+  time 13:03:56
+  train model
+Iteration 48
+  time 13:05:22
+  train model
+Iteration 49
+  time 13:06:12
+  train model
+Iteration 50
+  time 13:07:29
+  train model
+Iteration 51
+  time 13:08:09
+  train model
+Iteration 52
+  time 13:08:51
+  train model
+Iteration 53
+  time 13:10:55
+  train model
+Iteration 54
+  time 13:12:59
+  train model
+Iteration 55
+  time 13:14:19
+  train model
+Iteration 56
+  time 13:16:06
+  train model
+Iteration 57
+  time 13:19:21
+  train model
+Iteration 58
+  time 13:20:06
+  train model
+Iteration 59
+  time 13:21:23
+  train model
+Iteration 60
+  time 13:22:07
+  train model
+Iteration 61
+  test model
+  ownership loss 1.047  policy loss 2.259  test top 1 acc 0.303  test ownership MSE 0.0039  learning rate 5.0e-03  backbone multiplier 0.0  time 13:23:49
+  time 13:23:54
+  train model
+Iteration 62
+  time 13:24:39
+  train model
+Iteration 63
+  time 13:26:06
+  train model
+Iteration 64
+  time 13:27:24
+  train model
+Iteration 65
+  time 13:28:03
+  train model
+Iteration 66
+  time 13:28:43
+  train model
+Iteration 67
+  time 13:30:01
+  train model
+Iteration 68
+  time 13:31:26
+  train model
+Iteration 69
+  time 13:32:01
+  train model
+Iteration 70
+  time 13:32:58
+  train model
+Iteration 71
+  time 13:35:29
+  train model
+Iteration 72
+  time 13:36:11
+  train model
+Iteration 73
+  time 13:37:24
+  train model
+Iteration 74
+  time 13:38:52
+  train model
+Iteration 75
+  time 13:39:36
+  train model
+Iteration 76
+  time 13:40:28
+  train model
+Iteration 77
+  time 13:41:46
+  train model
+Iteration 78
+  time 13:42:58
+  train model
+Iteration 79
+  time 13:47:23
+  train model
+Iteration 80
+  time 13:48:05
+  train model
+Iteration 81
+  test model
+  ownership loss 1.159  policy loss 2.208  test top 1 acc 0.310  test ownership MSE 0.0039  learning rate 5.0e-03  backbone multiplier 0.0  time 13:49:14
+  time 13:49:18
+  train model
+Iteration 82
+  time 13:50:13
+  train model
+Iteration 83
+  time 13:52:43
+  train model
+Iteration 84
+  time 13:53:29
+  train model
+Iteration 85
+  time 13:54:08
+  train model
+Iteration 86
+  time 13:54:45
+  train model
+Iteration 87
+  time 13:55:34
+  train model
+Iteration 88
+  time 13:57:28
+  train model
+Iteration 89
+  time 13:58:09
+  train model
+Iteration 90
+  time 14:00:07
+  train model
+Iteration 91
+  time 14:00:45
+  train model
+Iteration 92
+  time 14:01:32
+  train model
+Iteration 93
+  time 14:03:34
+  train model
+Iteration 94
+  time 14:04:18
+  train model
+Iteration 95
+  time 14:05:34
+  train model
+Iteration 96
+  time 14:06:42
+  train model
+Iteration 97
+  time 14:11:20
+  train model
+Iteration 98
+  time 14:12:30
+  train model
+Iteration 99
+  time 14:13:29
+  train model
+Iteration 100
+  time 14:17:03
+  train model
+Iteration 101
+  test model
+  ownership loss 1.232  policy loss 2.151  test top 1 acc 0.314  test ownership MSE 0.0039  learning rate 5.0e-03  backbone multiplier 0.0  time 14:19:32
+  time 14:19:42
+  train model
+Iteration 102
+  time 14:21:01
+  train model
+Iteration 103
+  time 14:22:14
+  train model
+Iteration 104
+  time 14:23:28
+  train model
+Iteration 105
+  time 14:24:23
+  train model
+Iteration 106
+  time 14:27:30
+  train model
+Iteration 107
+  time 14:28:11
+  train model
+Iteration 108
+  time 14:29:30
+  train model
+Iteration 109
+  time 14:30:25
+  train model
+Iteration 110
+  time 14:33:11
+  train model
+Iteration 111
+  time 14:35:05
+  train model
+Iteration 112
+  time 14:36:09
+  train model
+Iteration 113
+  time 14:40:20
+  train model
+Iteration 114
+  time 14:41:12
+  train model
+Iteration 115
+  time 14:43:04
+  train model
+Iteration 116
+  time 14:43:56
+  train model
+Iteration 117
+  time 14:45:24
+  train model
+Iteration 118
+  time 14:47:16
+  train model
+Iteration 119
+  time 14:47:59
+  train model
+Iteration 120
+  time 14:48:45
+  train model
+Iteration 121
+  test model
+  ownership loss 1.047  policy loss 2.082  test top 1 acc 0.326  test ownership MSE 0.0039  learning rate 2.5e-03  backbone multiplier 0.0  time 14:51:17
+  time 14:51:27
+  train model
+Iteration 122
+  time 14:52:45
+  train model
+Iteration 123
+  time 14:53:39
+  train model
+Iteration 124
+  time 14:56:57
+  train model
+Iteration 125
+  time 14:57:38
+  train model
+Iteration 126
+  time 14:58:22
+  train model
+Iteration 127
+  time 14:59:45
+  train model
+Iteration 128
+  time 15:00:51
+  train model
+Iteration 129
+  time 15:04:49
+  train model
+Iteration 130
+  time 15:05:21
+  train model
+Iteration 131
+  time 15:05:57
+  train model
+Iteration 132
+  time 15:06:44
+  train model
+Iteration 133
+  time 15:08:03
+  train model
+Iteration 134
+  time 15:08:40
+  train model
+Iteration 135
+  time 15:09:19
+  train model
+Iteration 136
+  time 15:10:38
+  train model
+Iteration 137
+  time 15:11:23
+  train model
+Iteration 138
+  time 15:13:24
+  train model
+Iteration 139
+  time 15:14:06
+  train model
+Iteration 140
+  time 15:14:50
+  train model
+Iteration 141
+  test model
+  ownership loss 1.009  policy loss 2.049  test top 1 acc 0.328  test ownership MSE 0.0039  learning rate 2.5e-03  backbone multiplier 0.0  time 15:16:04
+  time 15:16:18
+  train model
+Iteration 142
+  time 15:18:09
+  train model
+Iteration 143
+  time 15:18:51
+  train model
+Iteration 144
+  time 15:19:30
+  train model
+Iteration 145
+  time 15:20:18
+  train model
+Iteration 146
+  time 15:21:30
+  train model
+Iteration 147
+  time 15:22:18
+  train model
+Iteration 148
+  time 15:24:22
+  train model
+Iteration 149
+  time 15:26:07
+  train model
+Iteration 150
+  time 15:30:40
+  train model
+Iteration 151
+  time 15:31:22
+  train model
+Iteration 152
+  time 15:32:44
+  train model
+Iteration 153
+  time 15:34:15
+  train model
+Iteration 154
+  time 15:36:49
+  train model
+Iteration 155
+  time 15:37:32
+  train model
+Iteration 156
+  time 15:38:31
+  train model
+Iteration 157
+  time 15:41:51
+  train model
+Iteration 158
+  time 15:43:47
+  train model
+Iteration 159
+  time 15:44:32
+  train model
+Iteration 160
+  time 15:47:15
+  train model
+Iteration 161
+  test model
+  ownership loss 0.961  policy loss 1.992  test top 1 acc 0.337  test ownership MSE 0.0038  learning rate 1.2e-03  backbone multiplier 0.0  time 15:48:31
+  time 15:48:57
+  train model
+Iteration 162
+  time 15:52:10
+  train model
+Iteration 163
+  time 15:52:59
+  train model
+Iteration 164
+  time 15:54:23
+  train model
+Iteration 165
+  time 15:55:57
+  train model
+Iteration 166
+  time 15:56:48
+  train model
+Iteration 167
+  time 15:58:16
+  train model
+Iteration 168
+  time 15:59:03
+  train model
+Iteration 169
+  time 16:00:28
+  train model
+Iteration 170
+  time 16:01:50
+  train model
+Iteration 171
+  time 16:02:34
+  train model
+Iteration 172
+  time 16:03:17
+  train model
+Iteration 173
+  time 16:04:01
+  train model
+Iteration 174
+  time 16:04:44
+  train model
+Iteration 175
+  time 16:05:28
+  train model
+Iteration 176
+  time 16:06:10
+  train model
+Iteration 177
+  time 16:06:57
+  train model
+Iteration 178
+  time 16:07:45
+  train model
+Iteration 179
+  time 16:09:26
+  train model
+Iteration 180
+  time 16:10:09
+  train model
+Iteration 181
+  test model
+  ownership loss 1.041  policy loss 1.988  test top 1 acc 0.339  test ownership MSE 0.0038  learning rate 1.2e-03  backbone multiplier 0.0  time 16:11:59
+  time 16:12:23
+  train model
+Iteration 182
+  time 16:15:12
+  train model
+Iteration 183
+  time 16:16:08
+  train model
+Iteration 184
+  time 16:18:23
+  train model
+Iteration 185
+  time 16:19:49
+  train model
+Iteration 186
+  time 16:21:49
+  train model
+Iteration 187
+  time 16:22:40
+  train model
+Iteration 188
+  time 16:24:07
+  train model
+Iteration 189
+  time 16:26:16
+  train model
+Iteration 190
+  time 16:31:57
+  train model
+Iteration 191
+  time 16:32:41
+  train model
+Iteration 192
+  time 16:34:17
+  train model
+Iteration 193
+  time 16:36:33
+  train model
+Iteration 194
+  time 16:38:33
+  train model
+Iteration 195
+  time 16:39:17
+  train model
+Iteration 196
+  time 16:40:07
+  train model
+Iteration 197
+  time 16:41:43
+  train model
+Iteration 198
+  time 16:44:38
+  train model
+Iteration 199
+  time 16:46:05
+  train model
+Iteration 200
+  time 16:47:40
+  train model
+Iteration 201
+  test model
+  ownership loss 1.001  policy loss 1.971  test top 1 acc 0.341  test ownership MSE 0.0038  learning rate 1.2e-03  backbone multiplier 0.0  time 16:49:34
+  time 16:49:39
+  train model
+Iteration 202
+  time 16:50:25
+  train model
+Iteration 203
+  time 16:52:58
+  train model
+Iteration 204
+  time 16:56:26
+  train model
+Iteration 205
+  time 16:57:53
+  train model
+Iteration 206
+  time 16:59:25
+  train model
+Iteration 207
+  time 17:00:53
+  train model
+Iteration 208
+  time 17:01:46
+  train model
+Iteration 209
+  time 17:03:13
+  train model
+Iteration 210
+  time 17:04:01
+  train model
+Iteration 211
+  time 17:04:38
+  train model
+Iteration 212
+  time 17:05:20
+  train model
+Iteration 213
+  time 17:06:03
+  train model
+Iteration 214
+  time 17:06:54
+  train model
+Iteration 215
+  time 17:08:24
+  train model
+Iteration 216
+  time 17:09:00
+  train model
+Iteration 217
+  time 17:10:02
+  train model
+Iteration 218
+  time 17:12:05
+  train model
+Iteration 219
+  time 17:12:46
+  train model
+Iteration 220
+  time 17:13:31
+  train model
+Iteration 221
+  test model
+  ownership loss 0.923  policy loss 1.954  test top 1 acc 0.345  test ownership MSE 0.0038  learning rate 6.2e-04  backbone multiplier 0.0  time 17:15:25
+  time 17:15:45
+  train model
+Iteration 222
+  time 17:17:56
+  train model
+Iteration 223
+  time 17:19:24
+  train model
+Iteration 224
+  time 17:21:25
+  train model
+Iteration 225
+  time 17:22:07
+  train model
+Iteration 226
+  time 17:22:51
+  train model
+Iteration 227
+  time 17:23:31
+  train model
+Iteration 228
+  time 17:24:20
+  train model
+Iteration 229
+  time 17:25:56
+  train model
+Iteration 230
+  time 17:28:05
+  train model
+Iteration 231
+  time 17:28:48
+  train model
+Iteration 232
+  time 17:29:27
+  train model
+Iteration 233
+  time 17:30:16
+  train model
+Iteration 234
+  time 17:32:32
+  train model
+Iteration 235
+  time 17:34:45
+  train model
+Iteration 236
+  time 17:35:25
+  train model
+Iteration 237
+  time 17:36:12
+  train model
+Iteration 238
+  time 17:38:10
+  train model
+Iteration 239
+  time 17:38:58
+  train model
+Iteration 240
+  time 17:40:23
+  train model
+Iteration 241
+  test model
+  ownership loss 1.069  policy loss 1.944  test top 1 acc 0.347  test ownership MSE 0.0038  learning rate 6.2e-04  backbone multiplier 0.0  time 17:41:35
+  time 17:41:55
+  train model
+Iteration 242
+  time 17:44:05
+  train model
+Iteration 243
+  time 17:44:49
+  train model
+Iteration 244
+  time 17:45:37
+  train model
+Iteration 245
+  time 17:47:51
+  train model
+Iteration 246
+  time 17:50:56
+  train model
+Iteration 247
+  time 17:53:15
+  train model
+Iteration 248
+  time 17:54:42
+  train model
+Iteration 249
+  time 17:55:27
+  train model
+Iteration 250
+  time 17:56:18
+  train model
+Iteration 251
+  time 17:57:43
+  train model
+Iteration 252
+  time 17:58:27
+  train model
+Iteration 253
+  time 17:59:25
+  train model
+Iteration 254
+  time 18:01:25
+  train model
+Iteration 255
+  time 18:02:13
+  train model
+Iteration 256
+  time 18:03:04
+  train model
+Iteration 257
+  time 18:04:00
+  train model
+Iteration 258
+  time 18:06:07
+  train model
+Iteration 259
+  time 18:06:56
+  train model
+Iteration 260
+  time 18:09:03
+  train model
+Iteration 261
+  test model
+  ownership loss 0.928  policy loss 1.919  test top 1 acc 0.350  test ownership MSE 0.0038  learning rate 3.1e-04  backbone multiplier 0.0  time 18:10:33
+  time 18:10:39
+  train model
+Iteration 262
+  time 18:11:31
+  train model
+Iteration 263
+  time 18:14:56
+  train model
+Iteration 264
+  time 18:15:55
+  train model
+Iteration 265
+  time 18:16:30
+  train model
+Iteration 266
+  time 18:17:29
+  train model
+Iteration 267
+  time 18:18:33
+  train model
+Iteration 268
+  time 18:21:50
+  train model
+Iteration 269
+  time 18:24:37
+  train model
+Iteration 270
+  time 18:25:14
+  train model
+Iteration 271
+  time 18:26:47
+  train model
+Iteration 272
+  time 18:27:15
+  train model
+Iteration 273
+  time 18:27:56
+  train model
+Iteration 274
+  time 18:29:24
+  train model
+Iteration 275
+  time 18:31:06
+  train model
+Iteration 276
+  time 18:33:13
+  train model
+Iteration 277
+  time 18:34:45
+  train model
+Iteration 278
+  time 18:35:15
+  train model
+Iteration 279
+  time 18:35:47
+  train model
+Iteration 280
+  time 18:36:52
+  train model
+Iteration 281
+  test model
+  ownership loss 0.985  policy loss 1.919  test top 1 acc 0.350  test ownership MSE 0.0038  learning rate 3.1e-04  backbone multiplier 0.0  time 18:38:23
+  time 18:38:28
+  train model
+Iteration 282
+  time 18:39:20
+  train model
+Iteration 283
+  time 18:42:48
+  train model
+Iteration 284
+  time 18:43:18
+  train model
+Iteration 285
+  time 18:43:47
+  train model
+Iteration 286
+  time 18:44:24
+  train model
+Iteration 287
+  time 18:45:44
+  train model
+Iteration 288
+  time 18:46:11
+  train model
+Iteration 289
+  time 18:46:37
+  train model
+Iteration 290
+  time 18:47:07
+  train model
+Iteration 291
+  time 18:47:37
+  train model
+Iteration 292
+  time 18:48:08
+  train model
+Iteration 293
+  time 18:49:05
+  train model
+Iteration 294
+  time 18:49:33
+  train model
+Iteration 295
+  time 18:50:02
+  train model
+Iteration 296
+  time 18:50:27
+  train model
+Iteration 297
+  time 18:50:55
+  train model
+Iteration 298
+  time 18:51:29
+  train model
+Iteration 299
+  time 18:52:29
+  train model
+Iteration 300
+  time 18:53:02
+  train model
+Iteration 301
+  test model
+  ownership loss 1.023  policy loss 1.925  test top 1 acc 0.351  test ownership MSE 0.0038  learning rate 3.1e-04  backbone multiplier 0.0  time 18:54:34
+  time 18:54:40
+  train model
+Iteration 302
+  time 18:55:18
+  train model
+Iteration 303
+  time 18:55:49
+  train model
+Iteration 304
+  time 18:56:45
+  train model
+Iteration 305
+  time 18:57:14
+  train model
+Iteration 306
+  time 18:57:42
+  train model
+Iteration 307
+  time 18:58:09
+  train model
+Iteration 308
+  time 18:58:38
+  train model
+Iteration 309
+  time 18:59:14
+  train model
+Iteration 310
+  time 19:00:17
+  train model
+Iteration 311
+  time 19:00:52
+  train model
+Iteration 312
+  time 19:01:51
+  train model
+Iteration 313
+  time 19:02:38
+  train model
+Iteration 314
+  time 19:04:47
+  train model
+Iteration 315
+  time 19:05:18
+  train model
+Iteration 316
+  time 19:06:15
+  train model
+Iteration 317
+  time 19:06:40
+  train model
+Iteration 318
+  time 19:07:21
+  train model
+Iteration 319
+  time 19:08:50
+  train model
+Iteration 320
+  time 19:09:38
+  train model
+Iteration 321
+  test model
+  ownership loss 1.040  policy loss 1.906  test top 1 acc 0.350  test ownership MSE 0.0038  learning rate 3.1e-04  backbone multiplier 0.0  time 19:12:01
+  time 19:12:08
+  train model
+Iteration 322
+  time 19:12:43
+  train model
+Iteration 323
+  time 19:13:21
+  train model
+Iteration 324
+  time 19:14:06
+  train model
+Iteration 325
+  time 19:15:25
+  train model
+Iteration 326
+  time 19:16:47
+  train model
+Iteration 327
+  time 19:18:12
+  train model
+Iteration 328
+  time 19:19:48
+  train model
+Iteration 329
+  time 19:23:05
+  train model
+Iteration 330
+  time 19:23:41
+  train model
+Iteration 331
+  time 19:24:19
+  train model
+Iteration 332
+  time 19:24:57
+  train model
+Iteration 333
+  time 19:25:43
+  train model
+Iteration 334
+  time 19:27:15
+  train model
+Iteration 335
+  time 19:29:26
+  train model
+Iteration 336
+  time 19:32:06
+  train model
+Iteration 337
+  time 19:33:16
+  train model
+Iteration 338
+  time 19:33:49
+  train model
+Iteration 339
+  time 19:34:28
+  train model
+Iteration 340
+  time 19:35:07
+  train model
+Iteration 341
+  test model
+  ownership loss 1.030  policy loss 1.907  test top 1 acc 0.352  test ownership MSE 0.0038  learning rate 1.6e-04  backbone multiplier 0.0  time 19:36:16
+  time 19:36:26
+  train model
+Iteration 342
+  time 19:38:01
+  train model
+Iteration 343
+  time 19:40:39
+  train model
+Iteration 344
+  time 19:41:15
+  train model
+Iteration 345
+  time 19:41:54
+  train model
+Iteration 346
+  time 19:42:36
+  train model
+Iteration 347
+  time 19:43:56
+  train model
+Iteration 348
+  time 19:45:14
+  train model
+Iteration 349
+  time 19:45:55
+  train model
+Iteration 350
+  time 19:47:23
+  train model
+Iteration 351
+  time 19:49:27
+  train model
+Iteration 352
+  time 19:51:31
+  train model
+Iteration 353
+  time 19:53:26
+  train model
+Iteration 354
+  time 19:59:13
+  train model
+Iteration 355
+  time 19:59:57
+  train model
+Iteration 356
+  time 20:01:33
+  train model
+Iteration 357
+  time 20:05:40
+  train model
+Iteration 358
+  time 20:07:45
+  train model
+Iteration 359
+  time 20:08:41
+  train model
+Iteration 360
+  test model
+  ownership loss 0.881  policy loss 1.891  test top 1 acc 0.354  test ownership MSE 0.0038  learning rate 1.6e-04  backbone multiplier 0.0  time 20:09:53
+  time 20:10:12
+  train model
+Value losses: 1.881, 1.739, 1.599, 1.607, 1.340, 1.047, 1.159, 1.232, 1.047, 1.009, 0.961, 1.041, 1.001, 0.923, 1.069, 0.928, 0.985, 1.023, 1.040, 1.030, 0.881
+Policy losses: 3.796, 3.506, 3.385, 3.354, 2.645, 2.259, 2.208, 2.151, 2.082, 2.049, 1.992, 1.988, 1.971, 1.954, 1.944, 1.919, 1.919, 1.925, 1.906, 1.907, 1.891
+Top 1 accuracies: 0.001, 0.212, 0.214, 0.216, 0.218, 0.269, 0.303, 0.310, 0.314, 0.326, 0.328, 0.337, 0.339, 0.341, 0.345, 0.347, 0.350, 0.350, 0.351, 0.350, 0.352, 0.354
+MSEs: 0.016, 0.005, 0.004, 0.004, 0.004, 0.004, 0.004, 0.004, 0.004, 0.004, 0.004, 0.004, 0.004, 0.004, 0.004, 0.004, 0.004, 0.004, 0.004, 0.004, 0.004, 0.004
+Learning rates: 0.010, 0.010, 0.010, 0.010, 0.010, 0.010, 0.005, 0.005, 0.005, 0.002, 0.002, 0.001, 0.001, 0.001, 0.001, 0.001, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000
+Backbone multipliers: 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000
+Done!
+
+Process finished with exit code 0
