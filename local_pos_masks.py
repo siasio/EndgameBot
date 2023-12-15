@@ -200,6 +200,14 @@ class AnalyzedPosition:
     def load_agent(self, agent):
         self.agent = agent
 
+    def analyze_and_decompose(self, mask, agent=None):
+        self.analyze_pos(mask, agent)
+        scaled_ownership = self.predicted_ownership * 50 + 50
+        print(scaled_ownership.astype(int))
+        self.ownership, _ = self.update_ownership(scaled_ownership, scaled_ownership, np.moveaxis(np.sign(self.predicted_ownership), 0, -1)[:, ::-1], self.size_x, self.size_y, self.pad_size, threshold=10)
+        self.ownership = np.moveaxis(self.ownership[:, ::-1], 0, -1)
+        self.board_segmentation(mode='manual')
+
     def analyze_pos(self, mask, agent=None):
         if agent is None:
             agent = self.agent
@@ -272,6 +280,8 @@ class AnalyzedPosition:
                                                         (b_ownership < threshold)
                                                                        ),
                                                        final_ownership[:size_x, :size_y] == -1).astype(np.int8)
+        # There was no return statement initially. Why?
+        return ownership, continuous_ownership
 
     def update_final_ownership(self, gtp_position, threshold=ownership_lenient_threshold):
         try:
@@ -431,6 +441,8 @@ class AnalyzedPosition:
                         cur_mask = self.get_local_pos_mask((x, y), force_start=False)
                         self.segmentation[cur_mask == 1] = counter
                         counter += 1
+        print(self.ownership)
+        # print(self.board_mask)
         ownership_to_use = np.logical_and((self.ownership == 0), (self.board_mask != 0))
         ownership_to_use = ownership_to_use.astype(np.uint8)
         if mode == "scipy":
@@ -449,8 +461,11 @@ class AnalyzedPosition:
     def get_local_pos_mask(self, intersection, force_start=False, use_precomputed=True):
 
         def neighbours(x, y):
-            deltas = [(0, 1), (1, 0), (1, 1), (0, -1), (-1, 0), (-1, -1), (1, -1), (-1, 1),
-                      (2, 0), (0, 2), (-2, 0), (0, -2)]
+            deltas = [
+                (0, 1), (1, 0), (0, -1), (-1, 0),
+                # (1, 1), (-1, -1), (1, -1), (-1, 1),
+                # (2, 0), (0, 2), (-2, 0), (0, -2)
+            ]
             nbs = [(x + delta[0], y + delta[1])
                    for delta in deltas
                    if 0 <= x + delta[0] <= self.size_x - 1 and 0 <= y + delta[1] <= self.size_y - 1]
