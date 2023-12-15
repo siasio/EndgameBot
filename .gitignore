@@ -6,3 +6,10 @@ analysis_logs
 refined_logs
 old_tries_to_remove
 venv
+bad_logs
+test_dir
+zip_logs
+strange-games
+*.ckpt
+*.zip
+*.rar

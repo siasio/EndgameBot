@@ -37,6 +37,7 @@ class LocalPositionNode(GameNode):
         self.answer: LocalPositionNode = None
         self.ko_starting_node_parent: LocalPositionNode = None
         self.ko_stopping_node_sibling: LocalPositionNode = None
+        self.is_sente = False
 
     @property
     def ko_starting_node(self):
@@ -103,7 +104,8 @@ class LocalPositionNode(GameNode):
                 pass
                 # print("Position seems to be finished but some intersections have uncertain evaluation:")
                 # print((10 * local_ownership).astype(int))
-            return np.round(local_ownership).astype(int)
+            local_ownership[abs(local_ownership) < 0.2] = 0
+            return np.sign(local_ownership).astype(int)
         else:
             return self.a0pos.predicted_ownership * self.a0pos.local_mask
 
@@ -260,15 +262,23 @@ class LocalPositionNode(GameNode):
             for child in self.children:
                 if not child.finished_calculation:
                     finished_calculation = False
+                if child.is_sente:
+                    scores = [child.calculated_score]
+                    ownerships = [child.calculated_ownership]
+                    break
                 scores.append(child.calculated_score)
                 ownerships.append(child.calculated_ownership)
-            # print("Scores", scores)
+            print("Scores", scores)
             self.finished_calculation = finished_calculation
             if len(scores) == 1 and self.total_ko_stage == 0:
+                if not self.children[0].is_sente:
+                    self.is_sente = True
+                else:
+                    self.is_sente = False
                 self.calculated_score = scores[0]
                 self.calculated_ownership = ownerships[0]
-                self.temperature = 0.0
-
+                self.temperature = max([c.calculated_score for c in self.children]) - min([c.calculated_score for c in self.children]) * 2
+                # print(f"Calculated temperature: {self.temperature:.03f} from {[c.calculated_score for c in self.children]}")
             else:
                 if self.total_ko_stage > 0:
                     print(f"Ko stage ({self.move}): {self.current_ko_stage}/{self.total_ko_stage + 2}")
@@ -281,8 +291,14 @@ class LocalPositionNode(GameNode):
                     print(f"No ko ({self.move})")
                 self.calculated_score = scores[1] * factor + scores[0] * (1 - factor)
                 self.calculated_ownership = np.sum(ownerships[1], axis=0) * factor + np.sum(ownerships[0], axis=0) * (1 - factor)
-                print(f"Calculated temperature: {self.temperature:.03f}")
                 self.temperature = abs(scores[0] - scores[1]) * 2 / (self.total_ko_stage + 2)
+                print(f"Calculated temperature: {self.temperature:.03f}")
+    #
+    # def check_first_move_sente(self):
+    #     if self.parent is not None:
+    #         return False
+    #     if self.next_move_player != NextMovePlayer.both:
+    #         return False
 
 
 class PositionTree(BaseGame[LocalPositionNode], QThread):
@@ -294,6 +310,7 @@ class PositionTree(BaseGame[LocalPositionNode], QThread):
         super(PositionTree, self).__init__(position_node)
         QThread.__init__(self, parent_widget)
         self.parent_widget = parent_widget
+        self.max_depth = 0
 
     def load_agent(self, agent):
         self.agent = agent
@@ -402,7 +419,7 @@ class PositionTree(BaseGame[LocalPositionNode], QThread):
                 break
             self.undo()
 
-    def run(self, max_depth=8):
+    def run(self):
         # self.current_node.a0pos.analyze_pos(self.current_node.a0pos.local_mask, agent=self.agent)
         self.initialize_current_node(self.current_node.a0pos.local_mask)
         while not self.current_node.finished_calculation:
@@ -415,7 +432,7 @@ class PositionTree(BaseGame[LocalPositionNode], QThread):
             self.expand_node()
             self.backup()
 
-            if self.current_node.expanded_tree_depth >= max_depth:
+            if self.current_node.expanded_tree_depth >= self.max_depth:
                 print(f"Reached max tree depth ({self.current_node.expanded_tree_depth})")
                 self.current_node.finished_calculation = True
                 # self.parent_widget.wait_for_paint_event()

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import threading
 import time
 
@@ -8,7 +10,7 @@ from PyQt5.QtGui import QColor, QPainter, QPen, QBrush, QFont, QPalette, QKeySeq
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QLabel, QHBoxLayout, QAction, QShortcut, QVBoxLayout, \
     QPushButton, QFileDialog, QCheckBox, QRadioButton, QButtonGroup, QToolButton, QFrame, QGraphicsWidget, \
     QGraphicsLinearLayout, QGridLayout, QGraphicsAnchorLayout, QGraphicsProxyWidget, QGraphicsView, \
-    QStyleOptionGraphicsItem, QGraphicsAnchor, QGraphicsItem
+    QStyleOptionGraphicsItem, QGraphicsAnchor, QGraphicsItem, QSlider
 from sgf_parser import Move
 import json
 import os
@@ -76,7 +78,7 @@ class GoBoard(QWidget):
         self.show_actual_move = False
         self.local_mask = [[1 for y in range(self.a0pos.pad_size)]
                            for x in range(self.a0pos.pad_size)]
-        self.agent = self.load_agent(os.path.join(os.getcwd(), 'a0-jax', "trained_2023-08.ckpt"))
+        self.agent = self.load_agent(os.path.join(os.getcwd(), 'a0-jax', "trained_2023-12-frozen.ckpt"))
         self.position_tree.load_agent(self.agent)
         self.from_pkl = False
         self.default_event_handler = self.handle_default_event
@@ -202,6 +204,8 @@ class GoBoard(QWidget):
                     painter.setPen(QColor("white" if self.a0pos.stones[i][j] == BLACK else "black"))
                     percentage = int(50 * (self.a0pos.predicted_ownership[i][j] + 1))
                     draw_text(x, y, str(percentage))
+                elif self.ownership_choice == "don't_show":
+                    pass
 
                 move_size = int(self.stone_radius / 2)
                 if self.move_choice == "show_top_b_w":
@@ -695,6 +699,10 @@ class MainWindow(QMainWindow):
         self.add_mask_button.setCheckable(True)
         self.add_mask_button.toggled.connect(self.add_mask)
         self.add_mask_button.setText("Mask")
+        self.detect_mask_button = QToolButton(self)
+        self.detect_mask_button.setCheckable(True)
+        self.detect_mask_button.toggled.connect(self.detect_mask)
+        self.detect_mask_button.setText("Detect")
         self.undo_button = QPushButton("Undo", self)
         self.undo_button.clicked.connect(self.undo_move)
         self.clear_button = QPushButton("Clear", self)
@@ -704,6 +712,7 @@ class MainWindow(QMainWindow):
         self.set_up_layout.addWidget(self.add_white_button)
         self.set_up_layout.addWidget(self.add_moves_button)
         self.set_up_layout.addWidget(self.add_mask_button)
+        self.set_up_layout.addWidget(self.detect_mask_button)
         self.set_up_layout.addWidget(self.undo_button)
         self.set_up_layout.addWidget(self.clear_button)
         self.set_up_group = QButtonGroup()
@@ -712,27 +721,46 @@ class MainWindow(QMainWindow):
         self.set_up_group.addButton(self.add_moves_button)
         self.set_up_group.addButton(self.add_mask_button)
         self.set_up_group.setExclusive(True)
+        # Add description of the slider
+        self.depth_label = QLabel("Depth of the game tree:")
+        # Add a QSlider to set the depth of the game tree (from 0 to 8)
+        self.depth_slider = QSlider(Qt.Horizontal)
+        self.depth_slider.setMinimum(0)
+        self.depth_slider.setMaximum(8)
+        self.depth_slider.setValue(0)
+        self.depth_slider.setTickPosition(QSlider.TicksBelow)
+        self.depth_slider.setTickInterval(1)
+        # Add tick labels for every depth
+        self.depth_slider.setTickPosition(QSlider.TicksBothSides)
+        self.depth_slider.valueChanged.connect(self.update_depth)
+        self.set_up_general_layout = QVBoxLayout()
+        self.set_up_general_layout.addLayout(self.set_up_layout)
+        self.set_up_general_layout.addWidget(self.depth_label)
+        self.set_up_general_layout.addWidget(self.depth_slider)
         self.set_up_frame = QFrame()
-        self.set_up_frame.setLayout(self.set_up_layout)
+        self.set_up_frame.setLayout(self.set_up_general_layout)
 
         buttons_layout = QVBoxLayout()
         buttons_layout.addWidget(self.select_dir_button)
         buttons_layout.addWidget(self.set_up_button)
         buttons_layout.addWidget(self.set_up_frame)
         self.set_up_frame.hide()
+        # self.depth_slider.hide()
 
-        self.calculate_button = QPushButton("Calculate temperature", self)
-        self.calculate_button.clicked.connect(self.calculate_score)
-        self.calculate_button.setStyleSheet("QPushButton {"
-                                             "background-color: #D3D3D3;}")
-        self.calculate_button.hide()
-        buttons_layout.addWidget(self.calculate_button)
+        # self.calculate_button = QPushButton("Calculate temperature", self)
+        # self.calculate_button.clicked.connect(self.calculate_score)
+        # self.calculate_button.setStyleSheet("QPushButton {"
+        #                                      "background-color: #D3D3D3;}")
+        # self.calculate_button.hide()
+        # buttons_layout.addWidget(self.calculate_button)
+        buttons_layout.addWidget(self.depth_slider)
 
         buttons_layout.addStretch()
 
         buttons_layout.addWidget(QLabel("Ownership:"))
         self.predicted_own_button = self.create_radio_button("Show with color", buttons_layout, self.ownership_buttons)
         self.own_numbers_button = self.create_radio_button("Show as percentages", buttons_layout, self.ownership_buttons)
+        self.no_own_button = self.create_radio_button("Don't show", buttons_layout, self.ownership_buttons)
 
         self.masked_ownership_cb = self.create_checkbox("Ownership only for mask", buttons_layout)
         self.ownership_button = self.create_checkbox("Show GT ownership", buttons_layout)
@@ -855,6 +883,10 @@ class MainWindow(QMainWindow):
         setattr(self.go_board, setting_name, state)
         self.go_board.update()
 
+    def update_depth(self):
+        self.go_board.position_tree.max_depth = self.depth_slider.value()
+        self.go_board.update()
+
     def show_previous_position(self):
         if self.current_position_index > 0:
             self.current_position_index -= 1
@@ -870,11 +902,13 @@ class MainWindow(QMainWindow):
             self.game_tree.clear_tree()
             self.set_up_button.setText("Finish and analyze")
             self.set_up_frame.show()
+            # self.depth_slider.show()
             self.set_up_group.buttons()[0].setChecked(True)
             self.update_buttons()
         else:
             self.set_up_button.setText("Set up position")
             self.set_up_frame.hide()
+            # self.depth_slider.hide()
             self.go_board.position_tree.update_a0pos_state()
             self.go_board.a0pos.local_mask = self.go_board.local_mask
             self.go_board.a0pos.analyze_pos(self.go_board.local_mask, self.go_board.agent)
@@ -896,8 +930,29 @@ class MainWindow(QMainWindow):
 
     def add_mask(self):
         if self.add_mask_button.isChecked():
-            self.go_board.local_mask = [[0 for y in range(self.go_board.a0pos.pad_size)]
+            if np.min(self.go_board.local_mask) > 0:
+                self.go_board.local_mask = [[0 for y in range(self.go_board.a0pos.pad_size)]
+                              for x in range(self.go_board.a0pos.pad_size)]
+            self.go_board.update()
+            self.go_board.default_event_handler = self.go_board.add_mask
+
+    def detect_mask(self):
+        if self.detect_mask_button.isChecked():
+            self.go_board.local_mask = [[1 for y in range(self.go_board.a0pos.pad_size)]
                           for x in range(self.go_board.a0pos.pad_size)]
+            self.go_board.a0pos.board_mask = [[1 for y in range(self.go_board.a0pos.pad_size)]
+                          for x in range(self.go_board.a0pos.pad_size)]
+            self.go_board.a0pos.analyze_and_decompose(self.go_board.local_mask, self.go_board.agent)
+            print(self.go_board.a0pos.segmentation)
+            biggest_segment = None
+            biggest_segment_size = 0
+            for i in range(1, np.max(self.go_board.a0pos.segmentation)):
+                segment = self.go_board.a0pos.segmentation == i
+                segment_size = np.sum(segment)
+                if biggest_segment_size < segment_size and segment_size < 20:
+                    biggest_segment_size = segment_size
+                    biggest_segment = segment
+            self.go_board.local_mask = biggest_segment
             self.go_board.update()
             self.go_board.default_event_handler = self.go_board.add_mask
 
@@ -957,7 +1012,7 @@ class MainWindow(QMainWindow):
         no_move_prob = self.go_board.a0pos.no_move_prob
         next_pl = self.go_board.position_tree.current_node.next_move_player
         if next_pl == NextMovePlayer.both:
-            self.label.setText(f'Move value: {abs(diff) - 2.0:.2f} points\n'
+            self.label.setText(f'Temperature: {abs(diff)/2 - 1.0:.2f} points\n'
                                f'Local score: {self.go_board.position_tree.current_node.calculated_score:.2f}')
         elif next_pl == NextMovePlayer.none:
             self.label.setText(f'Finished position\n'
