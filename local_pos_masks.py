@@ -161,8 +161,12 @@ class AnalyzedPosition:
         obj.stones_from_gtp(gtp_position['stones'])
         # self.moves_from_gtp(gtp_position['moves'])
         obj.update_final_ownership(gtp_final_position)
-        obj.update_ownership(gtp_position['w_own'], gtp_position['b_own'], threshold=ownership_strict_threshold)
+        obj.ownership, obj.continuous_ownership = obj.update_ownership(gtp_position['w_own'], gtp_position['b_own'], obj.final_ownership, obj.size_x, obj.size_y, obj.pad_size, threshold=ownership_strict_threshold)
         obj.board_segmentation()
+        node = obj.game.root
+        for i in range(obj.move_num):
+            node = node.children[0]
+        obj.color_to_play = 1 if node.move.player == 'W' else -1
         return obj
 
     @property
@@ -272,6 +276,7 @@ class AnalyzedPosition:
                                                         (b_ownership < threshold)
                                                                        ),
                                                        final_ownership[:size_x, :size_y] == -1).astype(np.int8)
+        return ownership, continuous_ownership
 
     def update_final_ownership(self, gtp_position, threshold=ownership_lenient_threshold):
         try:
@@ -300,10 +305,15 @@ class AnalyzedPosition:
     def stones_to_pos(katrain_stones, padded_shape):
         pos = np.zeros(padded_shape, dtype=np.int8)
         for st in katrain_stones:
-            pos[st.coords[0]][st.coords[1]] = 1 if st.player == 'B' else -1
+            try:
+                pos[st.coords[0]][st.coords[1]] = 1 if st.player == 'B' else -1
+            except:
+                print("Stone with no coords", st)
+                pass
         return pos
 
-    def get_single_local_pos(self, move_num=None):
+    def get_single_local_pos(self, move_num=None, include_previous_moves=True):
+        import cv2
         to_return = []
 
         num_segments = self.segmentation.max(initial=None)
@@ -319,12 +329,15 @@ class AnalyzedPosition:
         if move_num is None:
             move_num = self.move_num
         node = self.game.root
-        for _ in range(move_num - 1):
+        back_this_many_moves = 7 if include_previous_moves else 1
+        for _ in range(move_num - back_this_many_moves):
             node = node.children[0]
         game = BaseGame(node)
-        prev_pos = np.array(self.stones_to_pos(game.stones, self.shape))
-        node = node.children[0]
-        game.play(node.move)
+        prev_positions = []
+        for _ in range(back_this_many_moves):
+            prev_positions.append(np.array(self.stones_to_pos(game.stones, self.shape)))
+            node = node.children[0]
+            game.play(node.move)
         color_to_play = -1 if node.move.player == 'B' else 1
         cur_pos = np.array(self.stones_to_pos(game.stones, self.shape))
         assert np.array_equal(cur_pos, self.stones), f"Positions don\'t match for {self.cur_id}"
@@ -342,20 +355,23 @@ class AnalyzedPosition:
 
         coords, player, _ = self.get_first_local_move(local_mask, node=node.children[0])
 
-        positions = [prev_pos * color_to_play] * 7
+        positions = [prev_positions[0] * color_to_play] * (8 - len(prev_positions))
+        positions.extend([pos * color_to_play for pos in prev_positions[1:]])
         positions.append(cur_pos * color_to_play)
         positions.append(np.full(self.shape, color_to_play))
         if player is not None:
             player = player * color_to_play
         to_return.append((local_mask, positions, coords, player, self.continuous_ownership * color_to_play))
 
-        same_positions = [np.array(cur_pos)] * 8
+        same_positions = [np.array(cur_pos) * color_to_play] * 8 if not include_previous_moves else positions[:-1]
         same_positions.append(np.zeros(self.shape))
         for counter, i in enumerate(list(available_values)):
             mask = (reasonable_segmentation == i).astype(np.uint8)
             local_mask = cv2.dilate(mask, kernel_medium)
             local_mask = np.logical_and(local_mask, self.board_mask)
             coords, player, _ = self.get_first_local_move(local_mask, node=node.children[0])
+            if player is not None:
+                player = player * color_to_play
 
             # if random.choice([0, 1]):
             #     prev_pos = prev_pos[:, ::-1]
@@ -372,7 +388,7 @@ class AnalyzedPosition:
             #     if coords:
             #         coords = (self.pad_size - coords[0] - 1, coords[1])
 
-            to_return.append((local_mask, same_positions, coords, player, self.continuous_ownership))
+            to_return.append((local_mask, same_positions, coords, player, self.continuous_ownership * color_to_play))
             if counter > 2:
                 break
         return to_return
