@@ -169,6 +169,21 @@ class AnalyzedPosition:
         obj.color_to_play = 1 if node.move.player == 'W' else -1
         return obj
 
+    @classmethod
+    def from_sgf_file(cls, sgf_file_contents):
+        obj = cls()
+        obj.game = KaTrainSGF(sgf_file_contents)
+        obj.board_mask[:obj.size_x, :obj.size_y] = 1
+        obj.stones_from_sgf(obj.game)
+        # obj.update_final_ownership(obj.game.root)
+        # obj.ownership, obj.continuous_ownership = obj.update_ownership(obj.game.root.properties['W_OWN'], obj.game.root.properties['B_OWN'], obj.final_ownership, obj.size_x, obj.size_y, obj.pad_size, threshold=ownership_strict_threshold)
+        # obj.board_segmentation()
+        # node = obj.game.root
+        # for i in range(obj.move_num):
+        #     node = node.children[0]
+        obj.color_to_play = 1 # if node.move.player == 'W' else -1
+        return obj
+
     @property
     def last_move(self):
         if self.stacked_pos is None:
@@ -204,6 +219,14 @@ class AnalyzedPosition:
     def load_agent(self, agent):
         self.agent = agent
 
+    def analyze_and_decompose(self, mask, agent=None):
+        self.analyze_pos(mask, agent)
+        scaled_ownership = self.predicted_ownership * 50 + 50
+        # print(scaled_ownership.astype(int))
+        self.ownership, _ = self.update_ownership(scaled_ownership, scaled_ownership, np.moveaxis(np.sign(self.predicted_ownership), 0, -1)[:, ::-1], self.size_x, self.size_y, self.pad_size, threshold=10)
+        self.ownership = np.moveaxis(self.ownership[:, ::-1], 0, -1)
+        self.board_segmentation(mode='manual')
+
     def analyze_pos(self, mask, agent=None):
         if agent is None:
             agent = self.agent
@@ -231,6 +254,13 @@ class AnalyzedPosition:
 
     def clear_analysis(self):
         pass
+
+    def stones_from_sgf(self, sgf):
+        for color in 'BW':
+            for coords in sgf.root.properties[color] + sgf.root.properties[f'A{color}']:
+                stone = Move.from_sgf(coords, sgf.root.board_size,  player=color)
+                self.stones[stone.coords[0]][stone.coords[1]] = BLACK if stone.player == 'B' else WHITE
+        self.stacked_pos = stack_last_state(np.array(self.stones))
 
     def stones_from_gtp(self, stones):
         for color in 'BW':
@@ -465,8 +495,11 @@ class AnalyzedPosition:
     def get_local_pos_mask(self, intersection, force_start=False, use_precomputed=True):
 
         def neighbours(x, y):
-            deltas = [(0, 1), (1, 0), (1, 1), (0, -1), (-1, 0), (-1, -1), (1, -1), (-1, 1),
-                      (2, 0), (0, 2), (-2, 0), (0, -2)]
+            deltas = [
+                (0, 1), (1, 0), (0, -1), (-1, 0),
+                # (1, 1), (-1, -1), (1, -1), (-1, 1),
+                # (2, 0), (0, 2), (-2, 0), (0, -2)
+            ]
             nbs = [(x + delta[0], y + delta[1])
                    for delta in deltas
                    if 0 <= x + delta[0] <= self.size_x - 1 and 0 <= y + delta[1] <= self.size_y - 1]

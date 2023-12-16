@@ -271,14 +271,14 @@ class LocalPositionNode(GameNode):
             print("Scores", scores)
             self.finished_calculation = finished_calculation
             if len(scores) == 1 and self.total_ko_stage == 0:
-                if not self.children[0].is_sente:
+                if not self.children[0].is_sente and (self.children[0].player != self.player or self.parent is None):
                     self.is_sente = True
                 else:
                     self.is_sente = False
                 self.calculated_score = scores[0]
                 self.calculated_ownership = ownerships[0]
-                self.temperature = max([c.calculated_score for c in self.children]) - min([c.calculated_score for c in self.children]) * 2
-                # print(f"Calculated temperature: {self.temperature:.03f} from {[c.calculated_score for c in self.children]}")
+                self.temperature = (max([c.calculated_score for c in self.children]) - min([c.calculated_score for c in self.children])) - 1.0
+                print(f"Calculated temperature: {self.temperature:.03f} from {[c.calculated_score for c in self.children]}")
             else:
                 if self.total_ko_stage > 0:
                     print(f"Ko stage ({self.move}): {self.current_ko_stage}/{self.total_ko_stage + 2}")
@@ -291,8 +291,9 @@ class LocalPositionNode(GameNode):
                     print(f"No ko ({self.move})")
                 self.calculated_score = scores[1] * factor + scores[0] * (1 - factor)
                 self.calculated_ownership = np.sum(ownerships[1], axis=0) * factor + np.sum(ownerships[0], axis=0) * (1 - factor)
-                self.temperature = abs(scores[0] - scores[1]) * 2 / (self.total_ko_stage + 2)
+                self.temperature = abs(scores[0] - scores[1]) / (self.total_ko_stage + 2) - 1.0
                 print(f"Calculated temperature: {self.temperature:.03f}")
+            # self.temperature = abs(self.temperature) / 2 - 1.0
     #
     # def check_first_move_sente(self):
     #     if self.parent is not None:
@@ -302,7 +303,6 @@ class LocalPositionNode(GameNode):
 
 
 class PositionTree(BaseGame[LocalPositionNode], QThread):
-    update_signal = pyqtSignal()
 
     def __init__(self, position_node: LocalPositionNode, parent_widget=None):
         position_node.game = self
@@ -311,6 +311,11 @@ class PositionTree(BaseGame[LocalPositionNode], QThread):
         QThread.__init__(self, parent_widget)
         self.parent_widget = parent_widget
         self.max_depth = 0
+
+        self.update_signal = pyqtSignal() if self.parent_widget is not None else None
+        self.temperatures = []
+        self.checked_nodes = []
+        self.score_stats = []
 
     def load_agent(self, agent):
         self.agent = agent
@@ -342,9 +347,10 @@ class PositionTree(BaseGame[LocalPositionNode], QThread):
         while self.current_node.parent is not None:
             self.undo()
         for move in reversed(moves_to_play):
-            self.play(move)
-        self.update_signal.emit()
-        self.parent_widget.wait_for_paint_event()
+            self.play(move, ignore_ko=True)
+        if self.parent_widget is not None:
+            self.update_signal.emit()
+            self.parent_widget.wait_for_paint_event()
 
     def select_node(self):
         while True:
@@ -356,7 +362,7 @@ class PositionTree(BaseGame[LocalPositionNode], QThread):
             # Pick child for which expanded_tree_depth is the lowest
             # print([child.move for child in self.current_node.unfinished_children])
             node = min(self.current_node.unfinished_children, key=lambda x: x.expanded_tree_depth)
-            self.play(node.move)
+            self.play(node.move, ignore_ko=True)
 
     def expand_node(self):
         if self.current_node.next_move_player == NextMovePlayer.none:
@@ -384,6 +390,9 @@ class PositionTree(BaseGame[LocalPositionNode], QThread):
                 print("Illegal move!!", e)
                 # Check if IllegalMoveException was raised with text "Ko"
                 if "Ko" in str(e):
+                    # self.play(move, ignore_ko=True)
+                    # self.undo()
+                    self.current_node.finished_calculation = True
                     parent_ko_stage = self.current_node.parent.total_ko_stage if self.current_node.parent is not None else 0
                     node = self.current_node
                     for i in range(parent_ko_stage):
@@ -404,6 +413,7 @@ class PositionTree(BaseGame[LocalPositionNode], QThread):
                         print(node.ko_stopping_node_sibling.move)
                         node = node.parent
                     print("Ko stage", self.current_node.total_ko_stage)
+                    # self.undo()
                 else:
                     stones = self.get_position()
                     print(self.position_as_string(stones))
@@ -422,30 +432,44 @@ class PositionTree(BaseGame[LocalPositionNode], QThread):
     def run(self):
         # self.current_node.a0pos.analyze_pos(self.current_node.a0pos.local_mask, agent=self.agent)
         self.initialize_current_node(self.current_node.a0pos.local_mask)
+        current_depth = 0
+        iterations_on_this_depth = 0
         while not self.current_node.finished_calculation:
-            self.parent_widget.wait_for_paint_event()
+            iterations_on_this_depth += 1
+            if self.parent_widget is not None:
+                self.parent_widget.wait_for_paint_event()
             self.select_node()
             # time.sleep(1)
             # self.update_signal.emit()
             # time.sleep(2)
-            self.parent_widget.wait_for_paint_event()
+            if self.parent_widget is not None:
+                self.parent_widget.wait_for_paint_event()
             self.expand_node()
             self.backup()
+            assert self.current_node == self.root, "Current node is not root after backup"
+            if self.current_node.expanded_tree_depth > current_depth:
+                current_depth = self.current_node.expanded_tree_depth
+                self.temperatures.append(self.current_node.temperature)
+                self.checked_nodes.append(iterations_on_this_depth)
+                self.score_stats.append(' '.join([f"{c.calculated_score:.2f}" for c in self.current_node.children]))
+                iterations_on_this_depth = 0
 
             if self.current_node.expanded_tree_depth >= self.max_depth:
                 print(f"Reached max tree depth ({self.current_node.expanded_tree_depth})")
                 self.current_node.finished_calculation = True
                 # self.parent_widget.wait_for_paint_event()
-        self.update_signal.emit()
-        self.parent_widget.wait_for_paint_event()
+        if self.parent_widget is not None:
+            self.update_signal.emit()
+            self.parent_widget.wait_for_paint_event()
 
     def play(self, move: Move, ignore_ko: bool = False, max_depth=8):
         local_mask = self.current_node.a0pos.local_mask
         super().play(move=move, ignore_ko=ignore_ko)
         # self.current_node.id = self.parent_widget.last_number
         self.initialize_current_node(local_mask)
-        self.parent_widget.last_number += 1
-        self.parent_widget.stone_numbers[self.current_node.move.coords[0]][self.current_node.move.coords[1]] = self.parent_widget.last_number
+        if self.parent_widget is not None:
+            self.parent_widget.last_number += 1
+            self.parent_widget.stone_numbers[self.current_node.move.coords[0]][self.current_node.move.coords[1]] = self.parent_widget.last_number
         # print("Coords", self.current_node.move.coords)
         # self.update_func(to_print="PRINT THIS")
         # if self.goban is not None:
@@ -456,8 +480,9 @@ class PositionTree(BaseGame[LocalPositionNode], QThread):
         #     print("GOBAN IS NONE")
 
     def undo(self, n_times=1, stop_on_mistake=None):
-        self.parent_widget.last_number -= 1
-        self.parent_widget.stone_numbers[self.current_node.move.coords[0]][self.current_node.move.coords[1]] = None
+        if self.parent_widget is not None:
+            self.parent_widget.last_number -= 1
+            self.parent_widget.stone_numbers[self.current_node.move.coords[0]][self.current_node.move.coords[1]] = None
         # print("Coords", self.current_node.move.coords)
         super().undo(n_times=n_times, stop_on_mistake=stop_on_mistake)
 

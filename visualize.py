@@ -10,7 +10,7 @@ from PyQt5.QtGui import QColor, QPainter, QPen, QBrush, QFont, QPalette, QKeySeq
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QLabel, QHBoxLayout, QAction, QShortcut, QVBoxLayout, \
     QPushButton, QFileDialog, QCheckBox, QRadioButton, QButtonGroup, QToolButton, QFrame, QGraphicsWidget, \
     QGraphicsLinearLayout, QGridLayout, QGraphicsAnchorLayout, QGraphicsProxyWidget, QGraphicsView, \
-    QStyleOptionGraphicsItem, QGraphicsAnchor, QGraphicsItem, QSlider
+    QStyleOptionGraphicsItem, QGraphicsAnchor, QGraphicsItem, QSlider, QSpinBox
 from sgf_parser import Move
 import json
 import os
@@ -723,20 +723,32 @@ class MainWindow(QMainWindow):
         self.set_up_group.setExclusive(True)
         # Add description of the slider
         self.depth_label = QLabel("Depth of the game tree:")
+
+        self.depth_spinbox = QSpinBox(self)
+        # self.frames_spinbox.setGeometry(140, 480, 100, 30)
+        self.depth_spinbox.setMinimum(1)  # Set the minimum value for the spinbox
+        self.depth_spinbox.setMaximum(8)  # Set the maximum value for the spinbox
+        self.depth_spinbox.setValue(6)
+        self.depth_spinbox.setStyleSheet("QPushButton {"
+                                          "font-size: 24px;"
+                                          "padding: 20px;"
+                                          "border-radius: 60px;"
+                                          "}")
         # Add a QSlider to set the depth of the game tree (from 0 to 8)
-        self.depth_slider = QSlider(Qt.Horizontal)
-        self.depth_slider.setMinimum(0)
-        self.depth_slider.setMaximum(8)
-        self.depth_slider.setValue(0)
-        self.depth_slider.setTickPosition(QSlider.TicksBelow)
-        self.depth_slider.setTickInterval(1)
-        # Add tick labels for every depth
-        self.depth_slider.setTickPosition(QSlider.TicksBothSides)
-        self.depth_slider.valueChanged.connect(self.update_depth)
+        # self.depth_slider = QSlider(Qt.Horizontal)
+        # self.depth_slider.setMinimum(0)
+        # self.depth_slider.setMaximum(8)
+        # self.depth_slider.setValue(0)
+        # self.depth_slider.setTickPosition(QSlider.TicksBelow)
+        # self.depth_slider.setTickInterval(1)
+        # # Add tick labels for every depth displayed as numbers
+        # self.depth_slider.setTickPosition(QSlider.TicksBothSides)
+        #
+        # self.depth_slider.valueChanged.connect(self.update_depth)
         self.set_up_general_layout = QVBoxLayout()
         self.set_up_general_layout.addLayout(self.set_up_layout)
         self.set_up_general_layout.addWidget(self.depth_label)
-        self.set_up_general_layout.addWidget(self.depth_slider)
+        self.set_up_general_layout.addWidget(self.depth_spinbox)
         self.set_up_frame = QFrame()
         self.set_up_frame.setLayout(self.set_up_general_layout)
 
@@ -753,7 +765,7 @@ class MainWindow(QMainWindow):
         #                                      "background-color: #D3D3D3;}")
         # self.calculate_button.hide()
         # buttons_layout.addWidget(self.calculate_button)
-        buttons_layout.addWidget(self.depth_slider)
+        # buttons_layout.addWidget(self.depth_slider)
 
         buttons_layout.addStretch()
 
@@ -883,9 +895,9 @@ class MainWindow(QMainWindow):
         setattr(self.go_board, setting_name, state)
         self.go_board.update()
 
-    def update_depth(self):
-        self.go_board.position_tree.max_depth = self.depth_slider.value()
-        self.go_board.update()
+    # def update_depth(self):
+    #     self.go_board.position_tree.max_depth = self.depth_slider.value()
+    #     self.go_board.update()
 
     def show_previous_position(self):
         if self.current_position_index > 0:
@@ -909,6 +921,7 @@ class MainWindow(QMainWindow):
             self.set_up_button.setText("Set up position")
             self.set_up_frame.hide()
             # self.depth_slider.hide()
+            self.go_board.position_tree.max_depth = self.depth_spinbox.value()
             self.go_board.position_tree.update_a0pos_state()
             self.go_board.a0pos.local_mask = self.go_board.local_mask
             self.go_board.a0pos.analyze_pos(self.go_board.local_mask, self.go_board.agent)
@@ -1001,18 +1014,30 @@ class MainWindow(QMainWindow):
                     self.positions = self.positions[:100]
                     self.go_board.from_pkl = True
                     self.visualize_position()
+            elif self.selected_sgf.endswith(".sgf"):
+                with open(self.selected_sgf, 'r') as f:
+                    self.positions = [f.read()]
+                    self.visualize_position()
+            elif os.path.isdir(self.selected_sgf):
+                self.positions = []
+                for file in os.listdir(self.selected_sgf):
+                    if file.endswith(".sgf"):
+                        with open(os.path.join(self.selected_sgf, file), 'r') as f:
+                            self.positions.append(f.read())
+                        self.positions.append(os.path.join(self.selected_sgf, file))
+                self.visualize_position()
 
             settings.setValue("last_directory", selected_directory)
             # self.update_pinned_directories(selected_directory)
 
     def update_buttons(self):
-        diff = self.go_board.position_tree.current_node.temperature  # b_res - w_res
+        diff = self.go_board.position_tree.current_node.temperature
         black_move_prob = self.go_board.a0pos.black_move_prob
         white_move_prob = self.go_board.a0pos.white_move_prob
         no_move_prob = self.go_board.a0pos.no_move_prob
         next_pl = self.go_board.position_tree.current_node.next_move_player
         if next_pl == NextMovePlayer.both:
-            self.label.setText(f'Temperature: {abs(diff)/2 - 1.0:.2f} points\n'
+            self.label.setText(f'Temperature: {diff:.2f} points\n'
                                f'Local score: {self.go_board.position_tree.current_node.calculated_score:.2f}')
         elif next_pl == NextMovePlayer.none:
             self.label.setText(f'Finished position\n'
