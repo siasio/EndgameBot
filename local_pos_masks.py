@@ -7,8 +7,9 @@ from utils import stack_last_state
 import time
 import random
 import os
+from scipy.signal import convolve2d
 
-#os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = '.79'
+# os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = '.79'
 
 BLACK = 1
 WHITE = -1
@@ -60,6 +61,34 @@ artificial_kernels = [
 #         #                         for x in range(size)])
 
 
+def find_best_match(smaller_array, bigger_array):
+    # Perform 2D convolution
+    convolution_result = convolve2d(bigger_array, smaller_array, mode='valid')
+
+    # Find the indices of the maximum value in the convolution result
+    best_matches = convolution_result == np.max(convolution_result)
+    # randomly pick one of the best matches
+    max_index = random.choice(np.argwhere(best_matches))
+    # construct a matrix of zeros with the same shape as the bigger array
+    max_index_matrix = np.zeros_like(bigger_array)
+    # place the smaller array at the position of the best match
+    left_margin = smaller_array.shape[0] // 2
+    right_margin = smaller_array.shape[0] - left_margin
+    top_margin = smaller_array.shape[1] // 2
+    bottom_margin = smaller_array.shape[1] - top_margin
+    max_index_matrix[
+        max_index[0] - left_margin: max_index[0] + right_margin,
+        max_index[1] - top_margin: max_index[1] + bottom_margin
+    ] = smaller_array
+    max_index_matrix *= bigger_array
+
+    return max_index_matrix
+
+
+# result = find_best_match(smaller_array, bigger_array)
+# print("Best match found at position:", result)
+
+
 class AnalyzedPosition:
 
     def __init__(self, pad_size=19):
@@ -71,7 +100,7 @@ class AnalyzedPosition:
         self.ownership = np.array([[0 for y in range(self.pad_size)]
                                    for x in range(self.pad_size)])
         self.continuous_ownership = np.array([[0.0 for y in range(self.pad_size)]
-                                             for x in range(self.pad_size)], dtype=float)
+                                              for x in range(self.pad_size)], dtype=float)
         self.final_ownership = np.array([[0 for y in range(self.pad_size)]
                                          for x in range(self.pad_size)])
         self.reset_predictions()
@@ -94,7 +123,7 @@ class AnalyzedPosition:
         self.color_to_play = 1
 
         stones = np.array([[0 for y in range(self.pad_size)]
-                                    for x in range(self.pad_size)])
+                           for x in range(self.pad_size)])
         # self.stones = stones
         self.stacked_pos = stack_last_state(np.array(stones))
 
@@ -161,7 +190,10 @@ class AnalyzedPosition:
         obj.stones_from_gtp(gtp_position['stones'])
         # self.moves_from_gtp(gtp_position['moves'])
         obj.update_final_ownership(gtp_final_position)
-        obj.ownership, obj.continuous_ownership = obj.update_ownership(gtp_position['w_own'], gtp_position['b_own'], obj.final_ownership, obj.size_x, obj.size_y, obj.pad_size, threshold=ownership_strict_threshold)
+        obj.ownership, obj.continuous_ownership = obj.update_ownership(gtp_position['w_own'], gtp_position['b_own'],
+                                                                       obj.final_ownership, obj.size_x, obj.size_y,
+                                                                       obj.pad_size,
+                                                                       threshold=ownership_strict_threshold)
         obj.board_segmentation()
         node = obj.game.root
         for i in range(obj.move_num):
@@ -225,7 +257,9 @@ class AnalyzedPosition:
         self.analyze_pos(mask, agent)
         scaled_ownership = self.predicted_ownership * 50 + 50
         # print(scaled_ownership.astype(int))
-        self.ownership, _ = self.update_ownership(scaled_ownership, scaled_ownership, np.moveaxis(np.sign(self.predicted_ownership), 0, -1)[:, ::-1], self.size_x, self.size_y, self.pad_size, threshold=10)
+        self.ownership, _ = self.update_ownership(scaled_ownership, scaled_ownership,
+                                                  np.moveaxis(np.sign(self.predicted_ownership), 0, -1)[:, ::-1],
+                                                  self.size_x, self.size_y, self.pad_size, threshold=10)
         self.ownership = np.moveaxis(self.ownership[:, ::-1], 0, -1)
         self.board_segmentation(mode='manual')
 
@@ -248,7 +282,8 @@ class AnalyzedPosition:
             self.predicted_white_next_moves = np.array(action_logits[..., 0])
         else:
             action_logits = softmax(action_logits, axis=-1)
-            black_next_moves = np.array(action_logits[self.num_intersections:2 * self.num_intersections]).reshape(self.shape)
+            black_next_moves = np.array(action_logits[self.num_intersections:2 * self.num_intersections]).reshape(
+                self.shape)
             white_next_moves = np.array(action_logits[:self.num_intersections]).reshape(self.shape)
             self.predicted_black_next_moves = black_next_moves if self.color_to_play != -1 else white_next_moves
             self.predicted_white_next_moves = white_next_moves if self.color_to_play != -1 else black_next_moves
@@ -263,7 +298,7 @@ class AnalyzedPosition:
     def stones_from_sgf(self, sgf):
         for color in 'BW':
             for coords in sgf.root.properties[color] + sgf.root.properties[f'A{color}']:
-                stone = Move.from_sgf(coords, sgf.root.board_size,  player=color)
+                stone = Move.from_sgf(coords, sgf.root.board_size, player=color)
                 self.stones[stone.coords[0]][stone.coords[1]] = BLACK if stone.player == 'B' else WHITE
         self.stacked_pos = stack_last_state(np.array(self.stones))
 
@@ -274,7 +309,8 @@ class AnalyzedPosition:
                 stone = Move.from_sgf(coords, sgf.root.board_size)
                 mask[stone.coords[0]][stone.coords[1]] = 0
         elif 'SQ' in sgf.root.properties:
-            mask = np.zeros((self.pad_size, self.pad_size))  #np.array([[0 for y in range(self.pad_size)] for x in range(self.pad_size)])
+            mask = np.zeros((self.pad_size,
+                             self.pad_size))  # np.array([[0 for y in range(self.pad_size)] for x in range(self.pad_size)])
             for coords in sgf.root.properties['SQ']:
                 stone = Move.from_sgf(coords, sgf.root.board_size)
                 mask[stone.coords[0]][stone.coords[1]] = 1
@@ -317,15 +353,15 @@ class AnalyzedPosition:
         continuous_ownership[:size_x, :size_y] = AnalyzedPosition.mean_scaled_ownership(b_ownership, w_ownership)
 
         ownership[:size_x, :size_y] = np.logical_and(
-                                                    np.logical_and(
-                                                        (w_ownership > max_ownership - threshold),
-                                                        (b_ownership > max_ownership - threshold)
-                                                                   ),
-                                                    final_ownership[:size_x, :size_y] == 1).astype(np.int8) - np.logical_and(
-                                                        np.logical_and((w_ownership < threshold),
-                                                        (b_ownership < threshold)
-                                                                       ),
-                                                       final_ownership[:size_x, :size_y] == -1).astype(np.int8)
+            np.logical_and(
+                (w_ownership > max_ownership - threshold),
+                (b_ownership > max_ownership - threshold)
+            ),
+            final_ownership[:size_x, :size_y] == 1).astype(np.int8) - np.logical_and(
+            np.logical_and((w_ownership < threshold),
+                           (b_ownership < threshold)
+                           ),
+            final_ownership[:size_x, :size_y] == -1).astype(np.int8)
         return ownership, continuous_ownership
 
     def update_final_ownership(self, gtp_position, threshold=ownership_lenient_threshold):
@@ -338,7 +374,8 @@ class AnalyzedPosition:
         if not ownership:
             return
         ownership = np.moveaxis(np.array(ownership).reshape((self.size_x, self.size_y)), 0, -1)[:, ::-1]
-        self.final_ownership[:self.size_x, :self.size_y] = ((ownership > max_ownership - threshold).astype(np.int8) - (ownership < threshold).astype(np.int8))
+        self.final_ownership[:self.size_x, :self.size_y] = (
+                (ownership > max_ownership - threshold).astype(np.int8) - (ownership < threshold).astype(np.int8))
         self.fetched_final_ownership = True
 
     @staticmethod
@@ -376,6 +413,19 @@ class AnalyzedPosition:
                 reasonable_segmentation[reasonable_segmentation == i] = 0
                 available_values.remove(i)
 
+        secure_territories = reasonable_segmentation == 0
+
+        node = self.game.root
+        for _ in range(move_num):
+            node = node.children[0]
+        while node.children:
+            node = node.children[0]
+            coords = node.move.coords
+            secure_territories[coords[0]][coords[1]] = False
+
+        random_artificial_kernel = random.choice(artificial_kernels)
+        secure_segment = find_best_match(random_artificial_kernel, secure_territories)
+
         if move_num is None:
             move_num = self.move_num
         node = self.game.root
@@ -412,6 +462,9 @@ class AnalyzedPosition:
         if player is not None:
             player = player * color_to_play
         to_return.append((local_mask, positions, coords, player, self.continuous_ownership * color_to_play))
+
+        # To learn about secure territories
+        to_return.append((secure_segment, positions, None, None, np.round(self.continuous_ownership) * color_to_play))
 
         same_positions = [np.array(cur_pos) * color_to_play] * 8 if not include_previous_moves else positions[:-1]
         same_positions.append(np.zeros(self.shape))
@@ -486,7 +539,7 @@ class AnalyzedPosition:
         Segments the board into connected components
         :param mode: 'cv' for OpenCV, 'scipy' for scipy.ndimage.measurements.label, 'manual' segmenting by hand
         """
-        #start_time = time.time()
+        # start_time = time.time()
         if mode == "manual":
             counter = 1
             for x in range(self.size_x):
@@ -506,10 +559,10 @@ class AnalyzedPosition:
 
         elif mode == "cv":
             import cv2
-            #ownership_to_use = cv2.dilate(ownership_to_use, kernel_small)
+            # ownership_to_use = cv2.dilate(ownership_to_use, kernel_small)
             num_labels, self.segmentation = cv2.connectedComponents(ownership_to_use)
-        #end_time = time.time()
-        #print(f'Segmentation took {end_time - start_time} ms')
+        # end_time = time.time()
+        # print(f'Segmentation took {end_time - start_time} ms')
 
     # deprecated
     def get_local_pos_mask(self, intersection, force_start=False, use_precomputed=True):
