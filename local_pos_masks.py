@@ -62,8 +62,20 @@ artificial_kernels = [
 
 
 def find_best_match(smaller_array, bigger_array):
+    left_margin = smaller_array.shape[0] // 2
+    right_margin = smaller_array.shape[0] - left_margin
+    top_margin = smaller_array.shape[1] // 2
+    bottom_margin = smaller_array.shape[1] - top_margin
     # Perform 2D convolution
-    convolution_result = convolve2d(bigger_array, smaller_array, mode='valid')
+    typed_array = bigger_array.astype(np.float32)
+    new_array = np.zeros_like(bigger_array, dtype=np.float32)
+    # padded = np.zeros((bigger_array.shape[0] + left_margin + right_margin, bigger_array.shape[1] + top_margin + bottom_margin), dtype=np.float32)
+    # padded[left_margin: left_margin + bigger_array.shape[0], top_margin: top_margin + bigger_array.shape[1]] = bigger_array
+    for i in range(left_margin, bigger_array.shape[0] - right_margin):
+        for j in range(top_margin, bigger_array.shape[1] - bottom_margin):
+            # find part of the bigger array that matches the smaller array
+            new_array[i, j] = np.sum(typed_array[i - left_margin: i + right_margin, j - top_margin: j + bottom_margin] * smaller_array)
+    convolution_result = new_array  # convolve2d(typed_array, smaller_array, mode='same')
 
     # Find the indices of the maximum value in the convolution result
     best_matches = convolution_result == np.max(convolution_result)
@@ -72,15 +84,15 @@ def find_best_match(smaller_array, bigger_array):
     # construct a matrix of zeros with the same shape as the bigger array
     max_index_matrix = np.zeros_like(bigger_array)
     # place the smaller array at the position of the best match
-    left_margin = smaller_array.shape[0] // 2
-    right_margin = smaller_array.shape[0] - left_margin
-    top_margin = smaller_array.shape[1] // 2
-    bottom_margin = smaller_array.shape[1] - top_margin
-    max_index_matrix[
-        max_index[0] - left_margin: max_index[0] + right_margin,
-        max_index[1] - top_margin: max_index[1] + bottom_margin
-    ] = smaller_array
-    max_index_matrix *= bigger_array
+    try:
+        max_index_matrix[
+            max_index[0] - left_margin: max_index[0] + right_margin,
+            max_index[1] - top_margin: max_index[1] + bottom_margin
+        ] = smaller_array
+        max_index_matrix *= bigger_array
+    except ValueError as e:
+        print("ValueError:", e)
+        raise e
 
     return max_index_matrix
 
@@ -420,8 +432,9 @@ class AnalyzedPosition:
             node = node.children[0]
         while node.children:
             node = node.children[0]
-            coords = node.move.coords
-            secure_territories[coords[0]][coords[1]] = False
+            coords = node.move.coords if node.move else None
+            if coords is not None:
+                secure_territories[coords[0]][coords[1]] = False
 
         random_artificial_kernel = random.choice(artificial_kernels)
         secure_segment = find_best_match(random_artificial_kernel, secure_territories)
