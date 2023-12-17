@@ -384,7 +384,8 @@ class KataGoEngine(BaseEngine):
         next_move: Optional[GameNode] = None,
         extra_settings: Optional[Dict] = None,
         report_every: Optional[float] = None,
-        query_id: Optional[str] = None  # SF: Added for better query tracking
+        query_id: Optional[str] = None,  # SF: Added for better query tracking
+        include_policy: bool = False,
     ):
         nodes = analysis_node.nodes_from_root
         moves = [m for node in nodes for m in node.moves]
@@ -447,7 +448,7 @@ class KataGoEngine(BaseEngine):
             "boardYSize": size_y,
             "includeOwnership": ownership and not next_move,
             "includeMovesOwnership": ownership and not next_move,
-            "includePolicy": False,  # not next_move,
+            "includePolicy": include_policy,  # not next_move,
             "initialStones": [[m.player, m.gtp()] for m in initial_stones],
             "initialPlayer": analysis_node.initial_player,
             "moves": [[m.player, m.gtp()] for m in moves],

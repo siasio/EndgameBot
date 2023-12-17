@@ -13,12 +13,11 @@ import numpy as np
 from cloudpickle import cloudpickle
 
 from build_tree import PositionTree
+from katago_wrapper import KatagoWrapper
 from local_pos_masks import AnalyzedPosition
 from policies.resnet_policy import ResnetPolicyValueNet128, TransferResnet
 from sgf_parser import SGFNode, Move
-
-
-number_to_color = {1: "B", -1: "W"}
+from array_katrain_utils import add_stones_to_node
 
 
 def load_agent(ckpt_path):
@@ -39,10 +38,10 @@ def detect_mask(a0pos, agent):
     a0pos.board_mask = [[1 for y in range(a0pos.pad_size)]
                                       for x in range(a0pos.pad_size)]
     a0pos.analyze_and_decompose(a0pos.local_mask, agent)
-    print(a0pos.segmentation)
+    # print(a0pos.segmentation)
     biggest_segment = None
     biggest_segment_size = 0
-    for i in range(1, np.max(a0pos.segmentation)):
+    for i in range(1, np.max(a0pos.segmentation) + 1):
         segment = a0pos.segmentation == i
         segment_size = np.sum(segment)
         if biggest_segment_size < segment_size and segment_size < 20:
@@ -51,15 +50,6 @@ def detect_mask(a0pos, agent):
     if biggest_segment is not None:
         biggest_segment = cv2.dilate(biggest_segment.astype(np.uint8), np.ones((3, 3), np.uint8), iterations=1)
     a0pos.local_mask = biggest_segment
-
-
-def add_stones_to_node(node: SGFNode, array):
-    for i in range(array.shape[0]):
-        for j in range(array.shape[1]):
-            value = array[i, j]
-            if value != 0:
-                color = number_to_color[value]
-                node.add_list_property(f"A{color}", [Move(coords=(i, j), player=color).sgf(node.board_size)])
 
 
 def add_mask_to_node(node: SGFNode, array):
@@ -78,12 +68,12 @@ def lowest_number_for_dir(dir):
     return max(numbers) + 1 if numbers else 0
 
 
-def visualize_position(gtp_position, output_dir, agent=None, from_pkl=False, from_sgf=False, from_json=False):
+def visualize_position(gtp_position, output_dir, agent=None, from_pkl=False, from_sgf=False, from_json=False, mask_from_sgf=False):
     if from_sgf:
         with open(gtp_position, 'r') as f:
             sgf = f.read()
-        a0pos: AnalyzedPosition = AnalyzedPosition.from_sgf_file(sgf)
-        a0pos.board_mask = np.zeros_like(a0pos.board_mask)
+        a0pos: AnalyzedPosition = AnalyzedPosition.from_sgf_file(sgf, mask_from_sgf=mask_from_sgf)
+        a0pos.board_mask = np.ones_like(a0pos.board_mask)
         # a0pos.board_mask[:4, 16:] = 1
     elif from_json:
         a0pos: AnalyzedPosition = AnalyzedPosition.from_gtp_log(json.loads(gtp_position))
@@ -94,12 +84,12 @@ def visualize_position(gtp_position, output_dir, agent=None, from_pkl=False, fro
     position_tree: PositionTree = PositionTree.from_a0pos(a0pos)
     
     # a0pos.local_mask = a0pos.local_mask if a0pos.fixed_mask else a0pos.board_mask
-    agent = load_agent(agent)
 
-    detect_mask(a0pos, agent)
-    if a0pos.local_mask is None:
-        print(f"No local positions found in {gtp_position}")
-        return
+    if not mask_from_sgf:
+        detect_mask(a0pos, agent)
+        if a0pos.local_mask is None:
+            print(f"No local positions found in {gtp_position}")
+            return
     position_tree.load_agent(agent)
     position_tree.max_depth = 5
     # a0pos.analyze_pos(local_mask, agent)
@@ -125,8 +115,8 @@ def visualize_position(gtp_position, output_dir, agent=None, from_pkl=False, fro
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input', type=str, default=r"C:\Users\StanislawFrejlak\Uni\masters\bachelor-value-sgfs", help='Path to the input file')
-    parser.add_argument('--output', type=str, default=r"C:\Users\StanislawFrejlak\Uni\masters\bachelor-value-sgfs\frozen", help='Path to the output directory')
+    parser.add_argument('--input', type=str, default=r"C:\Users\StanislawFrejlak\Uni\masters\bachelor-value-masked", help='Path to the input file')
+    parser.add_argument('--output', type=str, default=r"C:\Users\StanislawFrejlak\Uni\masters\bachelor-value-masked\frozen", help='Path to the output directory')
     parser.add_argument('--model', type=str, default=r"C:\Users\StanislawFrejlak\Documents\GitHub\EndgameBot\a0-jax\trained_2023-12-frozen.ckpt", help='Path to the model file')
     
     args = parser.parse_args()
@@ -158,6 +148,12 @@ if __name__ == '__main__':
                 positions.append(os.path.join(selected_sgf, file))
 
     os.makedirs(args.output, exist_ok=True)
+    agent = load_agent(args.model) if args.model else KatagoWrapper()
+    # agent = KatagoWrapper()
     for position in positions:
-        visualize_position(position, output_dir=args.output, agent=args.model, from_pkl=from_pkl, from_sgf=from_sgf, from_json=from_json)
+        try:
+            visualize_position(position, output_dir=args.output, agent=agent, from_pkl=from_pkl, from_sgf=from_sgf, from_json=from_json, mask_from_sgf=True)
+        except Exception as e:
+            print(f"Error while processing {position}: {e}")
+            # raise e
     

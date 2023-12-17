@@ -201,7 +201,8 @@ class GameNode(SGFNode):
         find_alternatives=False,
         region_of_interest=None,
         report_every=REPORT_DT,
-        query_id=None
+        query_id=None,
+        include_policy=False,
     ):
         engine.request_analysis(
             self,
@@ -217,7 +218,8 @@ class GameNode(SGFNode):
             find_alternatives=find_alternatives,
             region_of_interest=region_of_interest,
             report_every=report_every,
-            query_id=query_id
+            query_id=query_id,
+            include_policy=include_policy,
         )
 
     def update_move_analysis(self, move_analysis, move_gtp):

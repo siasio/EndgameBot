@@ -170,7 +170,7 @@ class AnalyzedPosition:
         return obj
 
     @classmethod
-    def from_sgf_file(cls, sgf_file_contents):
+    def from_sgf_file(cls, sgf_file_contents, mask_from_sgf=False):
         obj = cls()
         obj.game = KaTrainSGF(sgf_file_contents)
         obj.board_mask[:obj.size_x, :obj.size_y] = 1
@@ -181,7 +181,9 @@ class AnalyzedPosition:
         # node = obj.game.root
         # for i in range(obj.move_num):
         #     node = node.children[0]
-        obj.color_to_play = 1 # if node.move.player == 'W' else -1
+        obj.color_to_play = 1  # if node.move.player == 'W' else -1
+        if mask_from_sgf:
+            obj.mask_from_sgf(obj.game)
         return obj
 
     @property
@@ -235,6 +237,9 @@ class AnalyzedPosition:
         board_mask = jnp.array(self.board_mask)
         mask = jnp.array(mask)
         action_logits, ownership_map = agent((state, mask, board_mask), batched=False)
+        undecided_ownership = (abs(ownership_map) * 50 + 50 < (100 - ownership_strict_threshold / 2)) * mask
+        if np.max(undecided_ownership) == 0:
+            action_logits[-1] = 1_000_000
         self.predicted_ownership = np.array(ownership_map)  # .reshape(self.shape)
         if self.color_to_play == -1:
             self.predicted_ownership = - self.predicted_ownership
@@ -261,6 +266,21 @@ class AnalyzedPosition:
                 stone = Move.from_sgf(coords, sgf.root.board_size,  player=color)
                 self.stones[stone.coords[0]][stone.coords[1]] = BLACK if stone.player == 'B' else WHITE
         self.stacked_pos = stack_last_state(np.array(self.stones))
+
+    def mask_from_sgf(self, sgf):
+        if 'TR' in sgf.root.properties:
+            mask = np.array([[1 for y in range(self.pad_size)] for x in range(self.pad_size)])
+            for coords in sgf.root.properties['TR']:
+                stone = Move.from_sgf(coords, sgf.root.board_size)
+                mask[stone.coords[0]][stone.coords[1]] = 0
+        elif 'SQ' in sgf.root.properties:
+            mask = np.zeros((self.pad_size, self.pad_size))  #np.array([[0 for y in range(self.pad_size)] for x in range(self.pad_size)])
+            for coords in sgf.root.properties['SQ']:
+                stone = Move.from_sgf(coords, sgf.root.board_size)
+                mask[stone.coords[0]][stone.coords[1]] = 1
+        else:
+            return
+        self.local_mask = mask
 
     def stones_from_gtp(self, stones):
         for color in 'BW':
