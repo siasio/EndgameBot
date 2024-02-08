@@ -412,7 +412,7 @@ class AnalyzedPosition:
                 pass
         return pos
 
-    def get_single_local_pos(self, move_num=None, include_previous_moves=True, use_secure_territories=False, agent=None, number_of_alternative_positions=1):
+    def get_single_local_pos(self, move_num=None, include_previous_moves=True, use_secure_territories=False, agent=None, number_of_alternative_positions=1, randomize_previous_moves_number=True):
         import cv2
         to_return = []
 
@@ -446,6 +446,8 @@ class AnalyzedPosition:
             move_num = self.move_num
         node = self.game.root
         back_this_many_moves = 7 if include_previous_moves else 1
+        if randomize_previous_moves_number and include_previous_moves:
+            back_this_many_moves = random.choice([1, 2, 3, 4, 5, 6, 7])
         for _ in range(move_num - back_this_many_moves):
             node = node.children[0]
         game = BaseGame(node)
