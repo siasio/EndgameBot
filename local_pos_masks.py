@@ -1,3 +1,4 @@
+# from build_tree import PositionTree
 from sgf_parser import Move
 import numpy as np
 import jax.numpy as jnp
@@ -411,33 +412,35 @@ class AnalyzedPosition:
                 pass
         return pos
 
-    def get_single_local_pos(self, move_num=None, include_previous_moves=True):
+    def get_single_local_pos(self, move_num=None, include_previous_moves=True, use_secure_territories=False, agent=None, number_of_alternative_positions=1):
         import cv2
         to_return = []
 
         num_segments = self.segmentation.max(initial=None)
 
         reasonable_segmentation = self.segmentation.copy()
+
+        if use_secure_territories:
+            secure_territories = reasonable_segmentation == 0
+
+            node = self.game.root
+            for _ in range(move_num):
+                node = node.children[0]
+            while node.children:
+                node = node.children[0]
+                coords = node.move.coords if node.move else None
+                if coords is not None:
+                    secure_territories[coords[0]][coords[1]] = False
+
+            random_artificial_kernel = random.choice(artificial_kernels)
+            secure_segment = find_best_match(random_artificial_kernel, secure_territories)
+
         available_values = set(list(range(1, num_segments + 1)))
         for i in range(1, num_segments + 1):
             segment_size = (reasonable_segmentation == i).sum()
-            if segment_size > 15 or segment_size < 3:
+            if segment_size > 15:  # or segment_size < 3:
                 reasonable_segmentation[reasonable_segmentation == i] = 0
                 available_values.remove(i)
-
-        secure_territories = reasonable_segmentation == 0
-
-        node = self.game.root
-        for _ in range(move_num):
-            node = node.children[0]
-        while node.children:
-            node = node.children[0]
-            coords = node.move.coords if node.move else None
-            if coords is not None:
-                secure_territories[coords[0]][coords[1]] = False
-
-        random_artificial_kernel = random.choice(artificial_kernels)
-        secure_segment = find_best_match(random_artificial_kernel, secure_territories)
 
         if move_num is None:
             move_num = self.move_num
@@ -466,18 +469,25 @@ class AnalyzedPosition:
 
         local_mask = np.logical_and(local_mask, self.board_mask)
 
-        coords, player, _ = self.get_first_local_move(local_mask, node=node.children[0])
-
         positions = [prev_positions[0] * color_to_play] * (8 - len(prev_positions))
         positions.extend([pos * color_to_play for pos in prev_positions[1:]])
         positions.append(cur_pos * color_to_play)
         positions.append(np.full(self.shape, color_to_play))
-        if player is not None:
-            player = player * color_to_play
-        to_return.append((local_mask, positions, coords, player, self.continuous_ownership * color_to_play))
 
-        # To learn about secure territories
-        to_return.append((secure_segment, positions, None, None, np.round(self.continuous_ownership) * color_to_play))
+        if agent is None:
+            coords, player, _ = self.get_first_local_move(local_mask, node=node.children[0])
+            if player is not None:
+                player = player * color_to_play
+            to_return.append((local_mask, positions, coords, player, self.continuous_ownership * color_to_play))
+
+        # else:
+        #     position_tree: PositionTree = PositionTree.from_a0pos(self)
+        #     position_tree.load_agent(agent)
+        #     position_tree.max_depth = 5
+        #     position_tree.run()
+        if use_secure_territories:
+            # To learn about secure territories
+            to_return.append((secure_segment, positions, None, None, np.round(self.continuous_ownership) * color_to_play))
 
         same_positions = [np.array(cur_pos) * color_to_play] * 8 if not include_previous_moves else positions[:-1]
         same_positions.append(np.zeros(self.shape))
@@ -485,27 +495,28 @@ class AnalyzedPosition:
             mask = (reasonable_segmentation == i).astype(np.uint8)
             local_mask = cv2.dilate(mask, kernel_medium)
             local_mask = np.logical_and(local_mask, self.board_mask)
-            coords, player, _ = self.get_first_local_move(local_mask, node=node.children[0])
-            if player is not None:
-                player = player * color_to_play
+            if agent is None:
+                coords, player, _ = self.get_first_local_move(local_mask, node=node.children[0])
+                if player is not None:
+                    player = player * color_to_play
 
-            # if random.choice([0, 1]):
-            #     prev_pos = prev_pos[:, ::-1]
-            #     cur_pos = cur_pos[:, ::-1]
-            #     reasonable_segmentation = reasonable_segmentation[:, ::-1]
-            #     local_mask = local_mask[:, ::-1]
-            #     if coords:
-            #         coords = (coords[0], self.pad_size - coords[1] - 1)
-            # if random.choice([0, 1]):
-            #     prev_pos = prev_pos[::-1, :]
-            #     cur_pos = cur_pos[::-1, :]
-            #     reasonable_segmentation = reasonable_segmentation[:, ::-1]
-            #     local_mask = local_mask[::-1, :]
-            #     if coords:
-            #         coords = (self.pad_size - coords[0] - 1, coords[1])
+                # if random.choice([0, 1]):
+                #     prev_pos = prev_pos[:, ::-1]
+                #     cur_pos = cur_pos[:, ::-1]
+                #     reasonable_segmentation = reasonable_segmentation[:, ::-1]
+                #     local_mask = local_mask[:, ::-1]
+                #     if coords:
+                #         coords = (coords[0], self.pad_size - coords[1] - 1)
+                # if random.choice([0, 1]):
+                #     prev_pos = prev_pos[::-1, :]
+                #     cur_pos = cur_pos[::-1, :]
+                #     reasonable_segmentation = reasonable_segmentation[:, ::-1]
+                #     local_mask = local_mask[::-1, :]
+                #     if coords:
+                #         coords = (self.pad_size - coords[0] - 1, coords[1])
 
-            to_return.append((local_mask, same_positions, coords, player, self.continuous_ownership * color_to_play))
-            if counter > 2:
+                to_return.append((local_mask, same_positions, coords, player, self.continuous_ownership * color_to_play))
+            if counter >= number_of_alternative_positions:
                 break
         return to_return
 

@@ -10,6 +10,10 @@ bad_logs
 test_dir
 zip_logs
 strange-games
+old_training_logs
 *.ckpt
 *.zip
 *.rar
+stats
+*.whl
+*.log

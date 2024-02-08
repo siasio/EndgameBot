@@ -1,6 +1,6 @@
 import time
 
-from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtCore import QThread, pyqtSignal, QObject
 
 import game
 from local_pos_masks import AnalyzedPosition
@@ -303,16 +303,17 @@ class LocalPositionNode(GameNode):
 
 
 class PositionTree(BaseGame[LocalPositionNode], QThread):
+    update_signal = pyqtSignal()
 
     def __init__(self, position_node: LocalPositionNode, parent_widget=None):
         position_node.game = self
         # self.update_func = update_func
         super(PositionTree, self).__init__(position_node)
-        QThread.__init__(self, parent_widget)
+        QObject.__init__(self, parent_widget)
         self.parent_widget = parent_widget
         self.max_depth = 0
 
-        self.update_signal = pyqtSignal() if self.parent_widget is not None else None
+        # self.update_signal = pyqtSignal() if self.parent_widget is not None else None
         self.temperatures = []
         self.checked_nodes = []
         self.score_stats = []

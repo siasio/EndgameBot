@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import sys
 import threading
 import time
+import traceback
 
 import cloudpickle
 from PyQt5 import QtGui, QtCore, QtWidgets
@@ -78,7 +80,7 @@ class GoBoard(QWidget):
         self.show_actual_move = False
         self.local_mask = [[1 for y in range(self.a0pos.pad_size)]
                            for x in range(self.a0pos.pad_size)]
-        self.agent = self.load_agent(os.path.join(os.getcwd(), 'a0-jax', "trained_2023-12-frozen.ckpt"))
+        self.agent = self.load_agent(os.path.join(os.getcwd(), 'a0-jax', "trained_2023-12.ckpt")) #-frozen
         self.position_tree.load_agent(self.agent)
         self.from_pkl = False
         self.default_event_handler = self.handle_default_event
@@ -1068,6 +1070,15 @@ class MainWindow(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication([])
+
+    def excepthook(exc_type, exc_value, exc_tb):
+        tb = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+        print("error caught!:")
+        print("error message:\n", tb)
+        app.quit()
+        # or QtWidgets.QApplication.exit(0)
+
+    sys.excepthook = excepthook
     window = MainWindow()
     window.show()
     app.exec_()

@@ -8,9 +8,16 @@ from sgf_to_position import process_selfplay
 
 # already_analysed = ['b15c192-s100342528-d74656514', 'b15c192-s104075264-d75404031', 'b15c192-s110063872-d76577596', 'b15c192-s112036608-d76942297', 'b15c192-s113093120-d77167297', 'b15c192-s114148608-d77384942', 'b15c192-s116823552-d77817876', 'b15c192-s117739264-d78042876', 'b15c192-s118727424-d78194950', 'b15c192-s119643136-d78374439', 'b15c192-s121615104-d78701482', 'b15c192-s123517440-d79049862', 'b15c192-s74759936-d68801237', 'b15c192-s75747584-d69325930', 'b15c192-s77791744-d69831672', 'b15c192-s78778368-d70131672', 'b15c192-s79835136-d70391659', 'b15c192-s80751872-d70656711', 'b15c192-s85612288-d71992807', 'b15c192-s86740736-d72259836', 'b15c192-s87729152-d72306050', 'b15c192-s88713216-d72516067', 'b15c192-s90757120-d72874752', 'b15c192-s91673088-d73049752', 'b15c192-s93576704-d73351344', 'b15c192-s98580736-d74299748']
 
-with open("analysed_list.log", "r") as f:
-    text = f.read()
-    already_analysed = text.split(" ")
+ALREADY_ANALYSED = "analysed_list.log"
+OUTPUT_ZIP_DIR = "zip_logs_new"
+
+if os.path.exists(ALREADY_ANALYSED):
+    with open("analysed_list.log", "r") as f:
+        text = f.read()
+        already_analysed = text.split(" ")
+else:
+    already_analysed = []
+
 
 _URL = "https://katagoarchive.org/g170/selfplay/index.html"
 PROJECT_ROOT = os.getcwd()
@@ -24,9 +31,9 @@ soup = bs(r.text)
 urls = []
 names = []
 _URL_PARENT = _URL.rsplit('/', 1)[0]
-used_counters = [int(a[:-4]) for a in os.listdir('zip_logs')]
+used_counters = [int(a[:-4]) for a in os.listdir(OUTPUT_ZIP_DIR) if a.endswith('.zip')]
 print(used_counters)
-max_counter = max(used_counters)
+max_counter = 0 if len(used_counters) == 0 else max(used_counters)
 print(max_counter)
 counter = 20 * max_counter
 for i, link in enumerate(soup.findAll('a')):
@@ -37,7 +44,7 @@ for i, link in enumerate(soup.findAll('a')):
         try:
             counter += 1
             if counter % 20 == 0:
-                shutil.make_archive(f"zip_logs/{counter//20:04}", "zip", refined_log_dir)
+                shutil.make_archive(f"{OUTPUT_ZIP_DIR}/{counter//20:04}", "zip", refined_log_dir)
                 shutil.rmtree(refined_log_dir)
                 os.makedirs(refined_log_dir, exist_ok=True)
             zip_path = os.path.join(selfplay_dir, ZIP_NAME)

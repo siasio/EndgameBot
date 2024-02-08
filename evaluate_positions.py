@@ -44,7 +44,7 @@ def detect_mask(a0pos, agent):
     for i in range(1, np.max(a0pos.segmentation) + 1):
         segment = a0pos.segmentation == i
         segment_size = np.sum(segment)
-        if biggest_segment_size < segment_size and segment_size < 20:
+        if biggest_segment_size < segment_size < 20:
             biggest_segment_size = segment_size
             biggest_segment = segment
     if biggest_segment is not None:
@@ -81,18 +81,16 @@ def visualize_position(gtp_position, output_dir, agent=None, from_pkl=False, fro
         a0pos: AnalyzedPosition = AnalyzedPosition.from_jax(gtp_position)
     else:
         return
-    position_tree: PositionTree = PositionTree.from_a0pos(a0pos)
-    
-    # a0pos.local_mask = a0pos.local_mask if a0pos.fixed_mask else a0pos.board_mask
 
     if not mask_from_sgf:
         detect_mask(a0pos, agent)
         if a0pos.local_mask is None:
             print(f"No local positions found in {gtp_position}")
             return
+
+    position_tree: PositionTree = PositionTree.from_a0pos(a0pos)
     position_tree.load_agent(agent)
     position_tree.max_depth = 5
-    # a0pos.analyze_pos(local_mask, agent)
     position_tree.run()
     stones = position_tree.get_position()
     print(position_tree.position_as_string(stones))
@@ -115,8 +113,8 @@ def visualize_position(gtp_position, output_dir, agent=None, from_pkl=False, fro
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input', type=str, default=r"C:\Users\StanislawFrejlak\Uni\masters\bachelor-value-masked", help='Path to the input file')
-    parser.add_argument('--output', type=str, default=r"C:\Users\StanislawFrejlak\Uni\masters\bachelor-value-masked\frozen", help='Path to the output directory')
+    parser.add_argument('--input', type=str, default=r"C:\Users\StanislawFrejlak\Uni\masters\strange", help='Path to the input file')
+    parser.add_argument('--output', type=str, default=r"C:\Users\StanislawFrejlak\Uni\masters\strange\frozen-cutoff", help='Path to the output directory')
     parser.add_argument('--model', type=str, default=r"C:\Users\StanislawFrejlak\Documents\GitHub\EndgameBot\a0-jax\trained_2023-12-frozen.ckpt", help='Path to the model file')
     
     args = parser.parse_args()

@@ -1,4 +1,5 @@
 import os
+import random
 
 from sgf_parser import SGF, SGFNode, Move
 from game import BaseGame, KaTrainSGF
@@ -16,7 +17,7 @@ with open(config_path, 'r') as f:
 katrain = KaTrainBase()
 
 
-def get_stones_on_board(sgf_string, engine, game_name):
+def get_stones_on_board(sgf_string, engine, game_name, percentage_to_go_back=0.15, randomize_percentage=True, number_of_position_to_check=1):
     def analyse_node(node, move_num, game_name, players='BW'):
         try:
             game = BaseGame(node)
@@ -34,7 +35,6 @@ def get_stones_on_board(sgf_string, engine, game_name):
     root = KaTrainSGF(sgf_string).root
     node = root
     game_len = 0
-    number_of_position_to_check = 1
 
     analysed_positions = False
     while True:
@@ -44,7 +44,10 @@ def get_stones_on_board(sgf_string, engine, game_name):
         if not analysed_positions and (node.is_pass or not node.children):
             node_to_analyse = node
             # print(f"Game with {game_len} moves, pass = {node.is_pass}")
-            go_back_max_this_many_moves = int(0.15 * game_len)
+            percentage_to_go_back_this_time = percentage_to_go_back
+            if randomize_percentage:
+                percentage_to_go_back_this_time *= random.random()
+            go_back_max_this_many_moves = int(percentage_to_go_back_this_time * game_len) + 1
             check_every_nth_position = go_back_max_this_many_moves // number_of_position_to_check
             if check_every_nth_position == 0:
                 # The game is very short, we don't want to take a look at it
