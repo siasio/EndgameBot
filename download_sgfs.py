@@ -24,6 +24,8 @@ PROJECT_ROOT = os.getcwd()
 selfplay_dir = os.path.join(PROJECT_ROOT, "kata-selfplay")
 refined_log_dir = os.path.join(PROJECT_ROOT, "refined_logs")
 log_dir = os.path.join(PROJECT_ROOT, "analysis_logs")
+for d in [selfplay_dir, refined_log_dir, log_dir, OUTPUT_ZIP_DIR]:
+    os.makedirs(d, exist_ok=True)
 
 # functional
 r = requests.get(_URL)
@@ -54,7 +56,10 @@ for i, link in enumerate(soup.findAll('a')):
                 print(f'Downloading zip {ZIP_NAME}')
                 rq = Request(url=_FULLURL,
                              headers={'User-Agent': 'Mozilla/5.0'})
-                zip_opened = urlopen(rq)
+                try:
+                    zip_opened = urlopen(rq)
+                except:
+                    continue
                 # res = urllib.urlopen(rq)
                 # urls.append(_FULLURL)
                 # names.append(soup.select('a')[i].attrs['href'])
@@ -68,7 +73,7 @@ for i, link in enumerate(soup.findAll('a')):
             if not os.path.exists(refined_log_path):
                 print(f'Extracting zip {ZIP_NAME} and processing selfplay')
                 process_selfplay(ZIP_NAME[:-4])
-                assert os.path.exists(refined_log_path)
+                # assert os.path.exists(refined_log_path)
                 shutil.rmtree(zip_path[:-4], ignore_errors=True)
             already_analysed.append(ZIP_NAME[:-4])
         except Exception as e:

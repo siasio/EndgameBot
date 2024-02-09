@@ -260,13 +260,13 @@ def simplify_log(filepath, new_filepath, sgfs_path):
                             # new_file.write(f'{cur_request_response}\n')
                             # del cur_request_response
 
-        with open(new_filepath, 'w') as new_file:
-            for per_game in per_game_requests_responses.values():
-                new_file.write(f'{per_game}\n')
-                del per_game
+    with open(new_filepath, 'w') as new_file:
+        for per_game in per_game_requests_responses.values():
+            new_file.write(f'{per_game}\n')
+            del per_game
 
-        # print('Requests with responses dict:', requests_with_responses_dict)
-        print(f'Registered {len(used_ids)} lines with responses/requests from {len(per_game_requests_responses)} games')
+    # print('Requests with responses dict:', requests_with_responses_dict)
+    print(f'Registered {len(used_ids)} lines with responses/requests from {len(per_game_requests_responses)} games')
 
 # simplify_log(r'analysis_logs/b15c192-s74759936-d68801237/B8F1EB31610F7EE2.log', r'refined_logs/b15c192-s74759936-d68801237/B8F1EB31610F7EE2.log')
 log_dir = 'analysis_logs'
