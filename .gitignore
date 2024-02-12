@@ -11,6 +11,7 @@ test_dir
 zip_logs
 strange-games
 old_training_logs
+models
 *.ckpt
 *.zip
 *.rar

@@ -286,7 +286,10 @@ class AnalyzedPosition:
         action_logits, ownership_map = agent((state, mask, board_mask), batched=False)
         undecided_ownership = (abs(ownership_map) * 50 + 50 < (100 - ownership_strict_threshold / 2)) * mask
         if np.max(undecided_ownership) == 0:
-            action_logits[-1] = 1_000_000
+            try:
+                action_logits = action_logits.at[-1].set(1_000_000)
+            except:
+                action_logits[-1] = 1_000_000
         self.predicted_ownership = np.array(ownership_map)  # .reshape(self.shape)
         if self.color_to_play == -1:
             self.predicted_ownership = - self.predicted_ownership

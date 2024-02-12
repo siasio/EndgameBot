@@ -6,6 +6,7 @@ import os
 import pickle
 import sys
 import time
+import traceback
 from typing import List, Tuple
 
 import cv2
@@ -21,6 +22,8 @@ from array_katrain_utils import add_stones_to_node
 
 
 def load_agent(ckpt_path):
+    if ckpt_path == "katago":
+        return KatagoWrapper()
     backbone = ResnetPolicyValueNet128(input_dims=(9, 9, 9), num_actions=82)
     agent = TransferResnet(backbone)
     agent = agent.eval()
@@ -69,10 +72,21 @@ def lowest_number_for_dir(dir):
 
 
 def visualize_position(gtp_position, output_dir, agent=None, from_pkl=False, from_sgf=False, from_json=False, mask_from_sgf=False):
+    gt_temperature, gt_score_b, gt_score_w = None, None, None
     if from_sgf:
         with open(gtp_position, 'r') as f:
             sgf = f.read()
         a0pos: AnalyzedPosition = AnalyzedPosition.from_sgf_file(sgf, mask_from_sgf=mask_from_sgf)
+        gt_data = a0pos.game.root.get_property("C")
+        if gt_data:
+            gt_data = gt_data.splitlines()
+            for line in gt_data:
+                if "T" in line:
+                    gt_temperature = float(line[2:])
+                if "S" in line:
+                    gt_score_b, gt_score_w = line[2:].split(" ")
+                    gt_score_b = float(gt_score_b)
+                    gt_score_w = float(gt_score_w)
         a0pos.board_mask = np.ones_like(a0pos.board_mask)
         # a0pos.board_mask[:4, 16:] = 1
     elif from_json:
@@ -93,9 +107,9 @@ def visualize_position(gtp_position, output_dir, agent=None, from_pkl=False, fro
     position_tree.max_depth = 5
     position_tree.run()
     stones = position_tree.get_position()
-    print(position_tree.position_as_string(stones))
-    print(position_tree.position_as_string(a0pos.local_mask))
-    print(f"[{gtp_position}] Temperature {position_tree.current_node.temperature}")
+    # print(position_tree.position_as_string(stones))
+    # print(position_tree.position_as_string(a0pos.local_mask))
+    # print(f"[{gtp_position}] Temperature {position_tree.current_node.temperature}")
     # node = SGFNode()
     temperatures = [f'Depth {i}: T {t:.2f} CN {cn} CS {cs}' for i, (t, cn, cs) in enumerate(zip(position_tree.temperatures, position_tree.checked_nodes, position_tree.score_stats))]
     temperature_str = '\n'.join(temperatures)
@@ -107,15 +121,28 @@ def visualize_position(gtp_position, output_dir, agent=None, from_pkl=False, fro
     filepath = os.path.join(output_dir, filename)
 
     position_tree.write_sgf(filepath)
+    try:
+
+        t_1 = position_tree.temperatures[0]
+        score_stats_1 = position_tree.score_stats[0]
+        t_final = position_tree.temperatures[-1]
+        score_stats_final = position_tree.score_stats[-1]
+        if gt_temperature is not None and gt_score_b is not None and gt_score_w is not None:
+            print(f"{os.path.basename(output_dir)} - {filename}")
+            print(f"GT temperature: {gt_temperature}, initial estimation: {t_1}, final temperature: {t_final}")
+            print(f"GT score: {gt_score_b} - {gt_score_w}, initial estimation: {score_stats_1}, final estimation: {score_stats_final}")
+    except IndexError:
+        print(f"{os.path.basename(output_dir)} - {filename}")
+        print("Didn't expand the tree!")
     # with open(, 'w') as f:
     #     f.write(node.sgf())
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input', type=str, default=r"C:\Users\StanislawFrejlak\Uni\masters\strange", help='Path to the input file')
-    parser.add_argument('--output', type=str, default=r"C:\Users\StanislawFrejlak\Uni\masters\strange\frozen-cutoff", help='Path to the output directory')
-    parser.add_argument('--model', type=str, default=r"C:\Users\StanislawFrejlak\Documents\GitHub\EndgameBot\a0-jax\trained_2023-12-frozen.ckpt", help='Path to the model file')
+    parser.add_argument('--input', type=str, default=r"C:\Users\StanislawFrejlak\Uni\masters\bachelor-value-masked", help='Path to the input file')
+    # parser.add_argument('--output', type=str, default=r"C:\Users\StanislawFrejlak\Uni\masters\strange\frozen-cutoff", help='Path to the output directory')
+    parser.add_argument('--model', type=str, nargs='+', default=[r"models\versatile_unfrozen_penalties3.ckpt", 'katago'], help='Path to the model file')
     
     args = parser.parse_args()
     from_pkl = False
@@ -145,13 +172,17 @@ if __name__ == '__main__':
             if file.endswith(".sgf"):
                 positions.append(os.path.join(selected_sgf, file))
 
-    os.makedirs(args.output, exist_ok=True)
-    agent = load_agent(args.model) if args.model else KatagoWrapper()
-    # agent = KatagoWrapper()
-    for position in positions:
-        try:
-            visualize_position(position, output_dir=args.output, agent=agent, from_pkl=from_pkl, from_sgf=from_sgf, from_json=from_json, mask_from_sgf=True)
-        except Exception as e:
-            print(f"Error while processing {position}: {e}")
-            # raise e
+    models_names = args.model
+    models_to_check = [load_agent(model) for model in models_names]
+
+    for agent, model_name in zip(models_to_check, models_names):
+        output_dir = os.path.join(args.input, os.path.splitext(os.path.basename(model_name))[0])
+        os.makedirs(output_dir, exist_ok=True)
+        for position in positions:
+            try:
+                visualize_position(position, output_dir=output_dir, agent=agent, from_pkl=from_pkl, from_sgf=from_sgf, from_json=from_json, mask_from_sgf=True)
+            except Exception as e:
+                print(f"Error while processing {position}:")
+                print(traceback.format_exc())
+                # raise e
     

@@ -249,7 +249,11 @@ class LocalPositionNode(GameNode):
     #         self.next_move_player = NextMovePlayer.both
     #         self._set_score_from_two_next(self.black_move, self.white_move)
 
-    def set_score_and_ownership(self):
+    def print_debug_info(self, info, verbose=False):
+        if verbose:
+            print(info)
+
+    def set_score_and_ownership(self, verbose=False):
         if len(self.children) == 0:
             # print("No children, setting ownership from current prediction")
             self.calculated_ownership = self.rounded_ownership
@@ -268,7 +272,7 @@ class LocalPositionNode(GameNode):
                     break
                 scores.append(child.calculated_score)
                 ownerships.append(child.calculated_ownership)
-            print("Scores", scores)
+            self.print_debug_info(f"Scores {scores}")
             self.finished_calculation = finished_calculation
             if len(scores) == 1 and self.total_ko_stage == 0:
                 if not self.children[0].is_sente and (self.children[0].player != self.player or self.parent is None):
@@ -278,21 +282,22 @@ class LocalPositionNode(GameNode):
                 self.calculated_score = scores[0]
                 self.calculated_ownership = ownerships[0]
                 self.temperature = (max([c.calculated_score for c in self.children]) - min([c.calculated_score for c in self.children])) - 1.0
-                print(f"Calculated temperature: {self.temperature:.03f} from {[c.calculated_score for c in self.children]}")
+
+                self.print_debug_info(f"Calculated temperature: {self.temperature:.03f} from {[c.calculated_score for c in self.children]}")
             else:
                 if self.total_ko_stage > 0:
-                    print(f"Ko stage ({self.move}): {self.current_ko_stage}/{self.total_ko_stage + 2}")
+                    self.print_debug_info(f"Ko stage ({self.move}): {self.current_ko_stage}/{self.total_ko_stage + 2}")
                     scores = [self.ko_starting_node.calculated_score, self.ko_stopping_node.calculated_score]
                     ownerships = [self.ko_starting_node.calculated_ownership, self.ko_stopping_node.calculated_ownership]
                     factor = self.current_ko_stage / (self.total_ko_stage + 2)
-                    print(f"Scores: {self.ko_starting_node.move} {scores[0]:.03f} - {self.ko_stopping_node.move} {scores[1]:.03f}, factor: {factor:.03f}")
+                    self.print_debug_info(f"Scores: {self.ko_starting_node.move} {scores[0]:.03f} - {self.ko_stopping_node.move} {scores[1]:.03f}, factor: {factor:.03f}")
                 else:
                     factor = 1 / len(scores)
-                    print(f"No ko ({self.move})")
+                    self.print_debug_info(f"No ko ({self.move})")
                 self.calculated_score = scores[1] * factor + scores[0] * (1 - factor)
                 self.calculated_ownership = np.sum(ownerships[1], axis=0) * factor + np.sum(ownerships[0], axis=0) * (1 - factor)
                 self.temperature = abs(scores[0] - scores[1]) / (self.total_ko_stage + 2) - 1.0
-                print(f"Calculated temperature: {self.temperature:.03f}")
+                self.print_debug_info(f"Calculated temperature: {self.temperature:.03f}")
             # self.temperature = abs(self.temperature) / 2 - 1.0
     #
     # def check_first_move_sente(self):
@@ -320,6 +325,10 @@ class PositionTree(BaseGame[LocalPositionNode], QThread):
 
     def load_agent(self, agent):
         self.agent = agent
+
+    def print_debug_info(self, info, verbose=False):
+        if verbose:
+            print(info)
 
     @classmethod
     def from_a0pos(cls, a0pos: AnalyzedPosition, parent_widget=None):
@@ -410,14 +419,14 @@ class PositionTree(BaseGame[LocalPositionNode], QThread):
                         node.current_ko_stage = i + 1
                         node.ko_starting_node_parent = self.current_node
                         node.ko_stopping_node_sibling = ko_stopping_node_sibling
-                        print(node.ko_starting_node_parent.move)
-                        print(node.ko_stopping_node_sibling.move)
+                        self.print_debug_info(node.ko_starting_node_parent.move)
+                        self.print_debug_info(node.ko_stopping_node_sibling.move)
                         node = node.parent
-                    print("Ko stage", self.current_node.total_ko_stage)
+                    self.print_debug_info("Ko stage", self.current_node.total_ko_stage)
                     # self.undo()
                 else:
                     stones = self.get_position()
-                    print(self.position_as_string(stones))
+                    self.print_debug_info(self.position_as_string(stones))
                     raise(e)
                 continue
         # print('Children', ' '.join([str(child.move) for child in self.current_node.children]))
@@ -456,7 +465,7 @@ class PositionTree(BaseGame[LocalPositionNode], QThread):
                 iterations_on_this_depth = 0
 
             if self.current_node.expanded_tree_depth >= self.max_depth:
-                print(f"Reached max tree depth ({self.current_node.expanded_tree_depth})")
+                self.print_debug_info(f"Reached max tree depth ({self.current_node.expanded_tree_depth})")
                 self.current_node.finished_calculation = True
                 # self.parent_widget.wait_for_paint_event()
         if self.parent_widget is not None:
@@ -498,19 +507,34 @@ class PositionTree(BaseGame[LocalPositionNode], QThread):
         self.current_node.game = self
         self.update_a0pos_state(visualize_recent_positions=False)
         self.current_node.a0pos.analyze_pos(local_mask, agent=self.agent)
+        print("STONES")
+        print(self.position_as_string(self.current_node.a0pos.stones))
+        # print(f"PREDICTED OWNERSHIP (color to play = {self.current_node.a0pos.color_to_play})")
+        # print(self.position_as_string(self.current_node.a0pos.stacked_pos[..., -2]))
+        # print(self.position_as_string(self.current_node.a0pos.predicted_ownership))
+        print("UNDECIDED")
+        und = (abs(self.current_node.a0pos.predicted_ownership) * 50 + 50 < (100 - 5 / 2)) * local_mask
+        print(self.position_as_string(und))
+        print(f"BLACK MOVE PROBABILITY: {self.current_node.a0pos.black_move_prob:.03f}")
+        print(f"WHITE MOVE PROBABILITY: {self.current_node.a0pos.white_move_prob:.03f}")
+        print(f"NO MOVE PROBABILITY: {self.current_node.a0pos.no_move_prob:.03f}")
+
+        input("Press enter to continue")
         self.current_node.is_initialized = True
 
     def update_a0pos_state(self, visualize_recent_positions=False):
         stones = self.get_position()
         if visualize_recent_positions:
-            print("Current position:")
-            print(self.position_as_string(stones))
+            self.print_debug_info("Current position:")
+            self.print_debug_info(self.position_as_string(stones))
         color_to_play = - self.current_node.player_sign(self.current_node.player)
         self.current_node.a0pos.color_to_play = -1 if color_to_play == -1 else 1
         if self.current_node.parent is None:
             self.current_node.a0pos.stacked_pos = stack_last_state(np.array(stones))
         else:
             previous_stacked_pos = self.current_node.parent.a0pos.stacked_pos
+            # if True:
+            #     self.current_node.a0pos.stacked_pos = stack_last_state(np.array(stones))
             if self.current_node.parent.player == self.current_node.player:
                 self.current_node.a0pos.stacked_pos = add_new_stack_previous_state(previous_stacked_pos,
                                                                                    np.array(stones),
