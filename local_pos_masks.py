@@ -239,6 +239,8 @@ class AnalyzedPosition:
             # The last channel in stacked_pos is an indicator of what is last move's color
             # If it's filled with zeros, it means that no information about the last move is included
             return None
+        if np.sum(self.stacked_pos[..., -2] - self.stacked_pos[..., -3]) == 0:
+            return None
         new_stones = self.stacked_pos[..., 7] ** 2 - self.stacked_pos[..., 6] ** 2
 
         # if not 0 < jnp.sum(new_stones) < 2:
@@ -285,11 +287,11 @@ class AnalyzedPosition:
         mask = jnp.array(mask)
         action_logits, ownership_map = agent((state, mask, board_mask), batched=False)
         undecided_ownership = (abs(ownership_map) * 50 + 50 < (100 - ownership_strict_threshold / 2)) * mask
-        if np.max(undecided_ownership) == 0:
-            try:
-                action_logits = action_logits.at[-1].set(1_000_000)
-            except:
-                action_logits[-1] = 1_000_000
+        # if np.max(undecided_ownership) == 0:
+        #     try:
+        #         action_logits = action_logits.at[-1].set(1_000_000)
+        #     except:
+        #         action_logits[-1] = 1_000_000
         self.predicted_ownership = np.array(ownership_map)  # .reshape(self.shape)
         if self.color_to_play == -1:
             self.predicted_ownership = - self.predicted_ownership
@@ -422,12 +424,14 @@ class AnalyzedPosition:
             max_num = 7 if force_include_prev_pos else 8
             picked_move_index = random.choice(list(range(picked_move_index, max_num)))
 
-        if picked_move_index == 7:
-            # We don't include any previous moves so it's better to hide the information about color to play
-            color_to_play = 0
-        elif randomize_color:
-            color_to_play = random.choice((-1, 0, 1))
-        color_for_multiplication = 1 if color_to_play == 0 else color_to_play
+        color_for_multiplication = 1 if color_to_play == 0 else color_to_play  # Make sure that we don't multiply by 0
+
+        # if picked_move_index == 7:
+        #     # We don't include any previous moves so it's better to hide the information about color to play
+        #     color_to_play = 0
+        # elif randomize_color:
+        #     # This shouldn't be used
+        #     color_to_play = random.choice((-1, 0, 1))
 
         positions = [prev_positions[picked_move_index] * color_for_multiplication] * picked_move_index  # 8 - len(prev_positions))
         positions.extend([pos * color_for_multiplication for pos in prev_positions[picked_move_index:]])
@@ -438,6 +442,50 @@ class AnalyzedPosition:
         if allow_zero_color:
             return random.choice((-1, 0, 1))
         return random.choice((-1, 1))
+
+    @staticmethod
+    def expand_mask_around_random_center(original_mask, possible_center_mask, force_include_center=True):
+        original_mask_coords = np.argwhere(original_mask)
+        x1, x2, y1, y2 = np.min(original_mask_coords[..., 0]), np.max(original_mask_coords[..., 0]), np.min(original_mask_coords[..., 1]), np.max(original_mask_coords[..., 1])
+        density = original_mask.sum() / ((x2 + 1 - x1) * (y2 + 1 - y1))
+        density_weight, normalizer_weight = 3, 1
+        density_to_use = (density_weight * density + normalizer_weight * .5) / (density_weight + normalizer_weight)
+        density_distance = min(density_to_use, 1 - density_to_use)
+        d_low, d_high = density_to_use - density_distance, density_to_use + density_distance
+
+        center = random.choice(np.argwhere(possible_center_mask))
+        distances = np.abs(np.argwhere(original_mask) - center)
+        biggest_x_distance_from_center = np.max(distances[:, 0])
+        biggest_y_distance_from_center = np.max(distances[:, 1])
+        max_dist = biggest_y_distance_from_center + biggest_x_distance_from_center
+        dist_delta = (d_high - d_low) / max_dist if max_dist > 0 else 0
+        neighborhood = np.zeros_like(original_mask).astype(np.float)
+        # set all neighbors of distance not bigger than biggest_distance_from_center to 1
+        for x in range(original_mask.shape[0]):
+            for y in range(original_mask.shape[1]):
+                if np.abs(x - center[0]) <= biggest_x_distance_from_center and np.abs(y - center[1]) <= biggest_y_distance_from_center:
+                    dist = np.abs(x - center[0]) + np.abs(y - center[1])
+                    neighborhood[x][y] = d_high - dist * dist_delta
+        # sample ones with probabilities in neighborhood
+        expanded_mask = np.random.random(neighborhood.shape) < neighborhood
+        expanded_mask = np.logical_or(expanded_mask, original_mask)
+        return expanded_mask
+
+    @staticmethod
+    def apply_random_masking(state, mask):
+        choice = random.choice([0, 1, 2])
+        state = np.moveaxis(np.array(state), 0, -1)
+        if choice == 0:
+            return state
+        else:
+            import cv2
+            # TODO: don't convert back and forth between jax numpy and numpy
+            dilated_mask = cv2.dilate(np.array(mask).astype(np.uint8),
+                                      np.ones((random.randint(3, 8), random.randint(3, 8)), np.uint8), iterations=1)
+            if choice == 1:
+                dilated_mask = np.logical_or(dilated_mask, np.random.random(dilated_mask.shape) < 0.5)
+            dilated_mask = np.array(dilated_mask)
+            return np.concatenate((state[..., :-1] * dilated_mask[..., None], state[..., -1:]), axis=-1)
 
     def get_single_local_pos(self, move_num=None, use_secure_territories=False, agent=None, number_of_alternative_positions=4, randomize_previous_moves_number=True, allow_zero_color=False):
         import cv2
@@ -459,6 +507,7 @@ class AnalyzedPosition:
                 if coords is not None:
                     secure_territories[coords[0]][coords[1]] = False
 
+            # TODO: Replace it with truly random expansion
             random_artificial_kernel = random.choice(artificial_kernels)
             secure_segment = find_best_match(random_artificial_kernel, secure_territories)
 
@@ -482,20 +531,28 @@ class AnalyzedPosition:
             node = node.children[0]
             game.play(node.move)
         color_to_play = -1 if node.move.player == 'B' else 1
+        assert color_to_play == self.color_to_play, "Assertion for the sake of training - perhaps, not always it should be like this"
+        if not color_to_play == self.color_to_play:
+            print("Colors to play don't match!")
         cur_pos = np.array(self.stones_to_pos(game.stones, self.shape))
         assert np.array_equal(cur_pos, self.stones), f"Positions don\'t match for {self.cur_id}"
         prev_positions.append(cur_pos)
 
         move_array = (self.stones_to_pos([node.move], self.shape) != 0).astype(np.uint8)
         dilated_move_array = cv2.dilate(move_array, kernel_small)
-        max_val = (dilated_move_array * reasonable_segmentation).max()
+        max_val = (dilated_move_array * self.segmentation).max()
         if max_val > 0:
-            local_mask = cv2.dilate((reasonable_segmentation == max_val).astype(np.uint8), kernel_medium)
-            available_values.remove(max_val)
+            original_local_mask = (self.segmentation == max_val).astype(np.uint8)
+            original_local_mask = np.logical_or(original_local_mask, cv2.dilate(move_array, kernel_small, iterations=4))
+            dilated_local_mask = cv2.dilate(original_local_mask.astype(np.uint8), kernel_medium).astype(bool)
+            local_mask = self.expand_mask_around_random_center(original_local_mask, dilated_local_mask)
+            if max_val in available_values:
+                available_values.remove(max_val)
         else:
-            local_mask = cv2.dilate(move_array.astype(np.uint8), random.choice(artificial_kernels))
-            local_mask = local_mask - np.logical_and(local_mask, self.segmentation)
+            original_local_mask = cv2.dilate(move_array.astype(np.uint8), random.choice(artificial_kernels))
+            local_mask = self.expand_mask_around_random_center(original_local_mask, original_local_mask)
 
+        local_mask = np.logical_and(local_mask, np.logical_or(self.segmentation == 0, self.segmentation == max_val))
         local_mask = np.logical_and(local_mask, self.board_mask)
 
         if agent is None:
@@ -505,7 +562,7 @@ class AnalyzedPosition:
             positions = self.pick_previous_positions(prev_positions, color_to_play, include_this_many_moves=7,
                                                      randomize_previous_moves_number=randomize_previous_moves_number,
                                                      force_include_prev_pos=True)
-
+            positions = self.apply_random_masking(positions, local_mask)
             to_return.append((local_mask, positions, coords, player, self.continuous_ownership * color_to_play))
 
         # else:
@@ -515,10 +572,11 @@ class AnalyzedPosition:
         #     position_tree.run()
         if use_secure_territories:
             # To learn about secure territories
-            random_color = self.randomize_color(allow_zero_color)
+            random_color = color_to_play  # self.randomize_color(allow_zero_color)
             positions = self.pick_previous_positions(prev_positions, random_color, include_this_many_moves=7,
                                                      randomize_previous_moves_number=randomize_previous_moves_number,
                                                      force_include_prev_pos=False)
+            positions = self.apply_random_masking(positions, secure_segment)
             to_return.append((secure_segment, positions, None, None, np.round(self.continuous_ownership) * random_color))
 
         # same_positions = [np.array(cur_pos) * color_to_play] * 8 if not include_previous_moves else positions[:-1]
@@ -526,11 +584,13 @@ class AnalyzedPosition:
         indices_of_alternative_positions = list(available_values)
         random.shuffle(indices_of_alternative_positions)
         for counter, i in enumerate(indices_of_alternative_positions):
-            mask = (reasonable_segmentation == i).astype(np.uint8)
-            local_mask = cv2.dilate(mask, kernel_medium)
+            original_local_mask = (reasonable_segmentation == i).astype(np.uint8)
+            dilated_local_mask = cv2.dilate(original_local_mask, kernel_medium)
+            local_mask = self.expand_mask_around_random_center(original_local_mask, dilated_local_mask)
+            local_mask = np.logical_and(local_mask, np.logical_or(self.segmentation == 0, self.segmentation == i))
             local_mask = np.logical_and(local_mask, self.board_mask)
             if agent is None:
-                random_color = self.randomize_color(allow_zero_color)
+                random_color = color_to_play  # self.randomize_color(allow_zero_color)
                 coords, player, _ = self.get_first_local_move(local_mask, node=node.children[0])
                 if player is not None:
                     player = player * random_color
@@ -553,6 +613,7 @@ class AnalyzedPosition:
                                                          randomize_previous_moves_number=randomize_previous_moves_number,
                                                          force_include_prev_pos=False)
 
+                positions = self.apply_random_masking(positions, local_mask)
                 to_return.append((local_mask, positions, coords, player, self.continuous_ownership * random_color))
             if counter >= number_of_alternative_positions:
                 break
@@ -578,7 +639,7 @@ class AnalyzedPosition:
                 if mask[x][y] == 1:
                     player = 1 if node.player == 'B' else -1
                     return (x, y), player, counter
-            if not node.children:
+            if not node.children or not node.move.coords:  # Break on first pass (addition 12.02.2024)
                 break
             counter += 1
             node = node.children[0]

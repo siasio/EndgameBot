@@ -80,7 +80,7 @@ class GoBoard(QWidget):
         self.show_actual_move = False
         self.local_mask = [[1 for y in range(self.a0pos.pad_size)]
                            for x in range(self.a0pos.pad_size)]
-        self.agent = self.load_agent(os.path.join(os.getcwd(), 'a0-jax', "trained_2023-12.ckpt")) #-frozen
+        self.agent = self.load_agent(os.path.join(os.getcwd(), 'models', "conv1x1-pretr-0405b-final.ckpt")) #-frozen trained_2023-12.ckpt
         self.position_tree.load_agent(self.agent)
         self.from_pkl = False
         self.default_event_handler = self.handle_default_event
@@ -239,6 +239,8 @@ class GoBoard(QWidget):
 
                 if self.show_actual_move and self.local_mask is not None:
                     coords, color, _ = self.a0pos.get_first_local_move(self.local_mask)
+                    color_to_multiply = self.a0pos.stacked_pos[..., -1][0][0]
+                    color = color * (-color_to_multiply) if color_to_multiply != 0 else color
                     if coords is not None and i == coords[0] and j == coords[1]:
                         painter.setBrush(Qt.NoBrush)
                         painter.setPen(QPen(QColor("blue"), 3, Qt.DotLine))

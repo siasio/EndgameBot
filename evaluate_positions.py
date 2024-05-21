@@ -20,6 +20,8 @@ from policies.resnet_policy import ResnetPolicyValueNet128, TransferResnet
 from sgf_parser import SGFNode, Move
 from array_katrain_utils import add_stones_to_node
 
+from cgt_engine.cgt_engine import find_mt3
+
 
 def load_agent(ckpt_path):
     if ckpt_path == "katago":
@@ -71,7 +73,7 @@ def lowest_number_for_dir(dir):
     return max(numbers) + 1 if numbers else 0
 
 
-def visualize_position(gtp_position, output_dir, agent=None, from_pkl=False, from_sgf=False, from_json=False, mask_from_sgf=False):
+def visualize_position(gtp_position, output_dir, agent=None, from_pkl=False, from_sgf=False, from_json=False, mask_from_sgf=False, cgt_engine=False):
     gt_temperature, gt_score_b, gt_score_w = None, None, None
     if from_sgf:
         with open(gtp_position, 'r') as f:
@@ -104,23 +106,33 @@ def visualize_position(gtp_position, output_dir, agent=None, from_pkl=False, fro
 
     position_tree: PositionTree = PositionTree.from_a0pos(a0pos)
     position_tree.load_agent(agent)
-    position_tree.max_depth = 5
-    position_tree.run()
-    stones = position_tree.get_position()
+    position_tree.max_depth = 10
+    position_tree.run(cgt_engine=cgt_engine, multiple_threshold=0.1)
+    if cgt_engine:
+        cgt_game = position_tree.root.cgt_game
+        find_mt3(cgt_game)
+    # print(f"Mean {cgt_game.mean}")
+    # print(f"Temp {cgt_game.temp}")
+
+
+    # stones = position_tree.get_position()
     # print(position_tree.position_as_string(stones))
     # print(position_tree.position_as_string(a0pos.local_mask))
     # print(f"[{gtp_position}] Temperature {position_tree.current_node.temperature}")
     # node = SGFNode()
-    temperatures = [f'Depth {i}: T {t:.2f} CN {cn} CS {cs}' for i, (t, cn, cs) in enumerate(zip(position_tree.temperatures, position_tree.checked_nodes, position_tree.score_stats))]
-    temperature_str = '\n'.join(temperatures)
-    position_tree.root.set_property("C", f"Temperature / Checked nodes / Children scores:\n{temperature_str}")
-    add_mask_to_node(position_tree.root, a0pos.local_mask)
-    # add_stones_to_node(node, stones)
-    # add_mask_to_node(node, a0pos.local_mask)
+    else:
+        temperatures = [f'Depth {i}: T {t:.2f} CN {cn} CS {cs}' for i, (t, cn, cs) in enumerate(zip(position_tree.temperatures, position_tree.checked_nodes, position_tree.score_stats))]
+        temperature_str = '\n'.join(temperatures)
+        position_tree.root.set_property("C", f"Temperature / Checked nodes / Children scores:\n{temperature_str}")
+        add_mask_to_node(position_tree.root, a0pos.local_mask)
+        # add_stones_to_node(node, stones)
+        # add_mask_to_node(node, a0pos.local_mask)
     filename = os.path.basename(gtp_position) if os.path.isfile(gtp_position) else str(lowest_number_for_dir(output_dir)).zfill(3) + '.sgf'
     filepath = os.path.join(output_dir, filename)
 
-    position_tree.write_sgf(filepath)
+    position_tree.write_sgf(filepath, cgt_engine=cgt_engine)
+
+    return
     try:
 
         t_1 = position_tree.temperatures[0]
@@ -140,9 +152,10 @@ def visualize_position(gtp_position, output_dir, agent=None, from_pkl=False, fro
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input', type=str, default=r"C:\Users\StanislawFrejlak\Uni\masters\bachelor-value-masked", help='Path to the input file')
+    parser.add_argument('--input', type=str, default=r"/home/test/Stas Private/masters/simple", help='Path to the input file') # bachelor-value-masked
     # parser.add_argument('--output', type=str, default=r"C:\Users\StanislawFrejlak\Uni\masters\strange\frozen-cutoff", help='Path to the output directory')
-    parser.add_argument('--model', type=str, nargs='+', default=[r"models\versatile_unfrozen_penalties3.ckpt", 'katago'], help='Path to the model file')
+    # r"models/conv1x1-pretr-0405b-102-before-unfreezing.ckpt", , "models/conv1x1-pretr-unfrozen_from_start.ckpt"
+    parser.add_argument('--model', type=str, nargs='+', default=[r"models/conv1x1-pretr-0405b-final.ckpt"], help='Path to the model file')
     
     args = parser.parse_args()
     from_pkl = False

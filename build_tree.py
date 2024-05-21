@@ -8,8 +8,10 @@ from game_node import GameNode
 from game import BaseGame
 from sgf_parser import Move
 import numpy as np
-from typing import TypeVar, Generic, Tuple
+from typing import TypeVar, Generic, Tuple, List
 from enum import Enum
+
+from cgt_engine.cgt_engine import G, Options, L, R, Pl
 from utils import stack_last_state, add_new_state, add_new_stack_previous_state
 
 
@@ -38,6 +40,7 @@ class LocalPositionNode(GameNode):
         self.ko_starting_node_parent: LocalPositionNode = None
         self.ko_stopping_node_sibling: LocalPositionNode = None
         self.is_sente = False
+        self.cgt_game = None
 
     @property
     def ko_starting_node(self):
@@ -113,6 +116,10 @@ class LocalPositionNode(GameNode):
     def best_move_coords(predictions) -> Tuple[int, int]:
         return tuple(np.unravel_index(np.argmax(predictions, axis=None), predictions.shape))
 
+    def good_move_coords(self, predictions, threshold) -> List[Tuple[int, int]]:
+        coords = np.argwhere(predictions > threshold)
+        return [(coord[0], coord[1]) for coord in coords]
+
     @property
     def cur_score(self):
         # if self.next_move_player == NextMovePlayer.none:
@@ -151,6 +158,18 @@ class LocalPositionNode(GameNode):
             return None
         coords = self.best_move_coords(self.a0pos.predicted_white_next_moves)
         return Move(coords, player="W")
+
+    def black_moves(self, threshold):
+        if self.next_move_player == NextMovePlayer.none or self.next_move_player == NextMovePlayer.white:
+            return []
+        coords = self.good_move_coords(self.a0pos.predicted_black_next_moves, threshold)
+        return [Move(coord, player="B") for coord in coords]
+
+    def white_moves(self, threshold):
+        if self.next_move_player == NextMovePlayer.none or self.next_move_player == NextMovePlayer.black:
+            return []
+        coords = self.good_move_coords(self.a0pos.predicted_white_next_moves, threshold)
+        return [Move(coord, player="W") for coord in coords]
 
     # @property
     # def calculated_score(self):
@@ -253,12 +272,31 @@ class LocalPositionNode(GameNode):
         if verbose:
             print(info)
 
-    def set_score_and_ownership(self, verbose=False):
+    def set_score_and_ownership(self, cgt_engine=False, verbose=False):
         if len(self.children) == 0:
             # print("No children, setting ownership from current prediction")
             self.calculated_ownership = self.rounded_ownership
             self.calculated_score = self.cur_score
+            self.cgt_game = G(float(self.cur_score))
+            assert self.finished_calculation, "No children but haven't finished calculation!"
         else:
+            if cgt_engine:
+                self.finished_calculation = all(child.finished_calculation for child in self.children)
+                if self.finished_calculation:
+                    g = G()
+                    g.children[L] = Options([child.cgt_game for child in self.children if child.player == 'B'])
+                    g.children[R] = Options([child.cgt_game for child in self.children if child.player == 'W'])
+                    # We know that there are some children because of the if condition.
+                    # But maybe there are only children of one color but of the other.
+                    # Then, we assume that it's because the latter color can get too much with their move,
+                    # i.e. either the previous move of the latter color was sente,
+                    # or the next move is a privilege of the former color.
+                    for pl in Pl:
+                        if len(g.children[pl]) == 0:
+                            g.children[pl] = Options(G(pl.opp.worst))
+                    self.cgt_game = g
+                return
+
             # print("Setting ownership from children prediction")
             scores = []
             ownerships = []
@@ -374,9 +412,10 @@ class PositionTree(BaseGame[LocalPositionNode], QThread):
             node = min(self.current_node.unfinished_children, key=lambda x: x.expanded_tree_depth)
             self.play(node.move, ignore_ko=True)
 
-    def expand_node(self):
+    def expand_node(self, use_multiple_moves=False, multiple_threshold=0.04):
         if self.current_node.next_move_player == NextMovePlayer.none:
             self.current_node.finished_calculation = True
+            self.current_node.cgt_game = G(float(self.current_node.cur_score))
         #     moves_to_play = []
         # elif self.current_node.next_move_player == NextMovePlayer.black:
         #     moves_to_play = [self.current_node.black_move]
@@ -384,7 +423,10 @@ class PositionTree(BaseGame[LocalPositionNode], QThread):
         #     moves_to_play = [self.current_node.white_move]
         # else:
         #     moves_to_play = [self.current_node.black_move, self.current_node.white_move]
-        moves_to_play = [self.current_node.black_move, self.current_node.white_move]
+        if not use_multiple_moves:
+            moves_to_play = [self.current_node.black_move, self.current_node.white_move]
+        else:
+            moves_to_play = self.current_node.black_moves(multiple_threshold) + self.current_node.white_moves(multiple_threshold)
         for move in moves_to_play:
             if move is None:
                 continue
@@ -431,15 +473,15 @@ class PositionTree(BaseGame[LocalPositionNode], QThread):
                 continue
         # print('Children', ' '.join([str(child.move) for child in self.current_node.children]))
 
-    def backup(self):
+    def backup(self, cgt_engine=False):
         while True:
-            self.current_node.set_score_and_ownership()
+            self.current_node.set_score_and_ownership(cgt_engine=cgt_engine)
             # print(f'{self.current_node.move} calculated score: {self.current_node.calculated_score:.03f}')
             if self.current_node.parent is None:
                 break
             self.undo()
 
-    def run(self):
+    def run(self, cgt_engine=True, multiple_threshold=0.1):
         # self.current_node.a0pos.analyze_pos(self.current_node.a0pos.local_mask, agent=self.agent)
         self.initialize_current_node(self.current_node.a0pos.local_mask)
         current_depth = 0
@@ -454,8 +496,8 @@ class PositionTree(BaseGame[LocalPositionNode], QThread):
             # time.sleep(2)
             if self.parent_widget is not None:
                 self.parent_widget.wait_for_paint_event()
-            self.expand_node()
-            self.backup()
+            self.expand_node(use_multiple_moves=cgt_engine, multiple_threshold=multiple_threshold)
+            self.backup(cgt_engine=cgt_engine)
             assert self.current_node == self.root, "Current node is not root after backup"
             if self.current_node.expanded_tree_depth > current_depth:
                 current_depth = self.current_node.expanded_tree_depth
@@ -496,7 +538,7 @@ class PositionTree(BaseGame[LocalPositionNode], QThread):
         # print("Coords", self.current_node.move.coords)
         super().undo(n_times=n_times, stop_on_mistake=stop_on_mistake)
 
-    def initialize_current_node(self, local_mask):
+    def initialize_current_node(self, local_mask, verbose=False):
         if self.current_node.is_initialized:
             # print(f"Already initialized node {self.current_node.move}")
             assert self.current_node.a0pos is not None, "Node is initialized but a0pos is None"
@@ -507,19 +549,20 @@ class PositionTree(BaseGame[LocalPositionNode], QThread):
         self.current_node.game = self
         self.update_a0pos_state(visualize_recent_positions=False)
         self.current_node.a0pos.analyze_pos(local_mask, agent=self.agent)
-        print("STONES")
-        print(self.position_as_string(self.current_node.a0pos.stones))
-        # print(f"PREDICTED OWNERSHIP (color to play = {self.current_node.a0pos.color_to_play})")
-        # print(self.position_as_string(self.current_node.a0pos.stacked_pos[..., -2]))
-        # print(self.position_as_string(self.current_node.a0pos.predicted_ownership))
-        print("UNDECIDED")
-        und = (abs(self.current_node.a0pos.predicted_ownership) * 50 + 50 < (100 - 5 / 2)) * local_mask
-        print(self.position_as_string(und))
-        print(f"BLACK MOVE PROBABILITY: {self.current_node.a0pos.black_move_prob:.03f}")
-        print(f"WHITE MOVE PROBABILITY: {self.current_node.a0pos.white_move_prob:.03f}")
-        print(f"NO MOVE PROBABILITY: {self.current_node.a0pos.no_move_prob:.03f}")
+        if verbose:
+            print("STONES")
+            print(self.position_as_string(self.current_node.a0pos.stones))
+            # print(f"PREDICTED OWNERSHIP (color to play = {self.current_node.a0pos.color_to_play})")
+            # print(self.position_as_string(self.current_node.a0pos.stacked_pos[..., -2]))
+            # print(self.position_as_string(self.current_node.a0pos.predicted_ownership))
+            print("UNDECIDED")
+            und = (abs(self.current_node.a0pos.predicted_ownership) * 50 + 50 < (100 - 5 / 2)) * local_mask
+            print(self.position_as_string(und))
+            print(f"BLACK MOVE PROBABILITY: {self.current_node.a0pos.black_move_prob:.03f}")
+            print(f"WHITE MOVE PROBABILITY: {self.current_node.a0pos.white_move_prob:.03f}")
+            print(f"NO MOVE PROBABILITY: {self.current_node.a0pos.no_move_prob:.03f}")
 
-        input("Press enter to continue")
+        # input("Press enter to continue")
         self.current_node.is_initialized = True
 
     def update_a0pos_state(self, visualize_recent_positions=False):
