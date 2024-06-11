@@ -1,7 +1,6 @@
 import copy
 import json
 import os
-import platform
 import queue
 import shlex
 import subprocess
@@ -12,7 +11,7 @@ from typing import Callable, Dict, List, Optional
 
 # from kivy.utils import platform as kivy_platform
 
-from constants import (
+from sgf_utils.constants import (
     OUTPUT_DEBUG,
     OUTPUT_ERROR,
     OUTPUT_EXTRA_DEBUG,
@@ -21,9 +20,9 @@ from constants import (
     KATAGO_EXCEPTION,
     PONDERING_REPORT_DT,
 )
-from game_node import GameNode
-from sgf_parser import Move
-from katrain_utils import find_package_resource, json_truncate_arrays
+from sgf_utils.game_node import GameNode
+from sgf_utils.sgf_parser import Move
+from sgf_utils.katrain_utils import find_package_resource, json_truncate_arrays
 
 
 class BaseEngine:  # some common elements between analysis and contribute engine
@@ -78,7 +77,7 @@ class BaseEngine:  # some common elements between analysis and contribute engine
             self.on_error("Kata exe not found") #.format(exe=exe), "KATAGO-EXE")
             return None
         elif not exepath:
-            paths = os.getenv("PATH", ".").split(os.pathsep) + ["/opt/homebrew/bin/"]
+            paths = os.getenv("PATH", "..").split(os.pathsep) + ["/opt/homebrew/bin/"]
             exe_with_paths = [os.path.join(path, exe) for path in paths if os.path.isfile(os.path.join(path, exe))]
             if not exe_with_paths:
                 self.on_error("Kata exe not found in path") #.format(exe=exe), "KATAGO-EXE")

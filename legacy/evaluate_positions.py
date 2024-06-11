@@ -1,26 +1,27 @@
 # Evaluate positions just as in visualize.py but without a GUI
 
 import argparse
+import datetime
 import json
 import os
 import pickle
-import sys
-import time
 import traceback
-from typing import List, Tuple
 
 import cv2
 import numpy as np
+import yaml
 from cloudpickle import cloudpickle
 
-from build_tree import PositionTree
-from katago_wrapper import KatagoWrapper
-from local_pos_masks import AnalyzedPosition
+from legacy.build_tree import PositionTree
+from game_tree.local_position_node import LocalPositionSGF, LocalPositionNode
+# from katago_wrapper import KatagoWrapper
+from legacy.local_pos_masks import AnalyzedPosition
 from policies.resnet_policy import ResnetPolicyValueNet128, TransferResnet
-from sgf_parser import SGFNode, Move
-from array_katrain_utils import add_stones_to_node
+from sgf_utils.sgf_parser import SGFNode, Move
+from game_tree.position_tree import PositionTree as PT
 
-from cgt_engine.cgt_engine import find_mt3
+
+# from cgt_engine.cgt_engine import find_mt3
 
 
 def load_agent(ckpt_path):
@@ -73,9 +74,15 @@ def lowest_number_for_dir(dir):
     return max(numbers) + 1 if numbers else 0
 
 
+def time_now():
+    return datetime.datetime.now().strftime('%H:%M:%S')
+
+
 def visualize_position(gtp_position, output_dir, agent=None, from_pkl=False, from_sgf=False, from_json=False, mask_from_sgf=False, cgt_engine=False):
     gt_temperature, gt_score_b, gt_score_w = None, None, None
+    game_name = None
     if from_sgf:
+        game_name = os.path.basename(gtp_position)
         with open(gtp_position, 'r') as f:
             sgf = f.read()
         a0pos: AnalyzedPosition = AnalyzedPosition.from_sgf_file(sgf, mask_from_sgf=mask_from_sgf)
@@ -104,16 +111,19 @@ def visualize_position(gtp_position, output_dir, agent=None, from_pkl=False, fro
             print(f"No local positions found in {gtp_position}")
             return
 
-    position_tree: PositionTree = PositionTree.from_a0pos(a0pos)
+    position_tree: PositionTree = PositionTree.from_a0pos(a0pos, game_name=game_name)
     position_tree.load_agent(agent)
-    position_tree.max_depth = 10
-    position_tree.run(cgt_engine=cgt_engine, multiple_threshold=0.1)
-    if cgt_engine:
-        cgt_game = position_tree.root.cgt_game
-        find_mt3(cgt_game)
-    # print(f"Mean {cgt_game.mean}")
-    # print(f"Temp {cgt_game.temp}")
+    position_tree.max_depth = 20
 
+    position_tree.real_run(cgt_engine=cgt_engine, multiple_threshold=0.1)
+    if cgt_engine:
+        for node in position_tree.iter_nodes():
+            try:
+                cgt_info = node.cgt_info()
+            except Exception as e:
+                cgt_info = "CGT calculations failed"
+            node.set_property("C", cgt_info)
+        print(position_tree.root.get_property("C"))
 
     # stones = position_tree.get_position()
     # print(position_tree.position_as_string(stones))
@@ -124,13 +134,13 @@ def visualize_position(gtp_position, output_dir, agent=None, from_pkl=False, fro
         temperatures = [f'Depth {i}: T {t:.2f} CN {cn} CS {cs}' for i, (t, cn, cs) in enumerate(zip(position_tree.temperatures, position_tree.checked_nodes, position_tree.score_stats))]
         temperature_str = '\n'.join(temperatures)
         position_tree.root.set_property("C", f"Temperature / Checked nodes / Children scores:\n{temperature_str}")
-        add_mask_to_node(position_tree.root, a0pos.local_mask)
-        # add_stones_to_node(node, stones)
-        # add_mask_to_node(node, a0pos.local_mask)
+    add_mask_to_node(position_tree.root, a0pos.local_mask)
+    # add_stones_to_node(node, stones)
+    # add_mask_to_node(node, a0pos.local_mask)
     filename = os.path.basename(gtp_position) if os.path.isfile(gtp_position) else str(lowest_number_for_dir(output_dir)).zfill(3) + '.sgf'
     filepath = os.path.join(output_dir, filename)
 
-    position_tree.write_sgf(filepath, cgt_engine=cgt_engine)
+    position_tree.write_sgf(filepath)
 
     return
     try:
@@ -150,13 +160,38 @@ def visualize_position(gtp_position, output_dir, agent=None, from_pkl=False, fro
     #     f.write(node.sgf())
 
 
+def new_vis(gtp_position, config, output_dir):
+    game_name = os.path.basename(gtp_position)
+    root_node: LocalPositionNode = LocalPositionSGF.parse_file(gtp_position)
+    position_tree = PT(root_node, config=config, game_name=game_name)
+    try:
+        position_tree.build_tree(max_depth=20)
+    except Exception as e:
+        traceback.print_exc()
+    for node in position_tree.iter_nodes():
+        try:
+            cgt_info = node.cgt_info()
+        except Exception as e:
+            traceback.print_exc()
+            cgt_info = "CGT calculations failed"
+        node.set_property("C", cgt_info)
+    print(position_tree.root.get_property("C"))
+    add_mask_to_node(position_tree.root, position_tree.mask)
+    filename = os.path.basename(gtp_position) if os.path.isfile(gtp_position) else str(
+        lowest_number_for_dir(output_dir)).zfill(3) + '.sgf'
+    filepath = os.path.join(output_dir, filename)
+
+    position_tree.write_sgf(filepath)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input', type=str, default=r"/home/test/Stas Private/masters/simple", help='Path to the input file') # bachelor-value-masked
+    parser.add_argument('--input', type=str, help='Path to the input file') # bachelor-value-masked
     # parser.add_argument('--output', type=str, default=r"C:\Users\StanislawFrejlak\Uni\masters\strange\frozen-cutoff", help='Path to the output directory')
     # r"models/conv1x1-pretr-0405b-102-before-unfreezing.ckpt", , "models/conv1x1-pretr-unfrozen_from_start.ckpt"
-    parser.add_argument('--model', type=str, nargs='+', default=[r"models/conv1x1-pretr-0405b-final.ckpt"], help='Path to the model file')
-    
+    parser.add_argument('--model', type=str, nargs='+', default=[r"models\conv1x1-pretr-0405b-final.ckpt"], help='Path to the model file')
+    parser.add_argument('--config', type=str, default=r"a0_thresholded.yaml", help='Config name')
+
     args = parser.parse_args()
     from_pkl = False
     from_json = False
@@ -175,9 +210,7 @@ if __name__ == '__main__':
 
     elif selected_sgf.endswith(".sgf"):
         from_sgf = True
-        position = [selected_sgf]
-        # with open(selected_sgf, 'r') as f:
-        #     positions = [f.read()]
+        positions = [selected_sgf]
     elif os.path.isdir(selected_sgf):
         from_sgf = True
         positions = []
@@ -185,17 +218,31 @@ if __name__ == '__main__':
             if file.endswith(".sgf"):
                 positions.append(os.path.join(selected_sgf, file))
 
-    models_names = args.model
-    models_to_check = [load_agent(model) for model in models_names]
-
-    for agent, model_name in zip(models_to_check, models_names):
-        output_dir = os.path.join(args.input, os.path.splitext(os.path.basename(model_name))[0])
+    if args.config is not None:
+        config_file = os.path.join('../analysis_config', args.config)
+        with open(config_file, 'r') as f:
+            config = yaml.safe_load(f)
+        output_dir = selected_sgf if os.path.isdir(selected_sgf) else os.path.dirname(selected_sgf)
+        output_dir = os.path.join(output_dir, args.config.rsplit('.', 1)[0] + 'new')
         os.makedirs(output_dir, exist_ok=True)
         for position in positions:
             try:
-                visualize_position(position, output_dir=output_dir, agent=agent, from_pkl=from_pkl, from_sgf=from_sgf, from_json=from_json, mask_from_sgf=True)
-            except Exception as e:
-                print(f"Error while processing {position}:")
-                print(traceback.format_exc())
-                # raise e
+                new_vis(position, config, output_dir)
+            except Exception:
+                traceback.print_exc()
+    else:
+        models_names = args.model
+        models_to_check = [load_agent(model) for model in models_names]
+
+        for agent, model_name in zip(models_to_check, models_names):
+            output_dir = selected_sgf if os.path.isdir(selected_sgf) else os.path.dirname(selected_sgf)
+            output_dir = os.path.join(output_dir, os.path.splitext(os.path.basename(model_name))[0])
+            os.makedirs(output_dir, exist_ok=True)
+            for position in positions:
+                try:
+                    visualize_position(position, output_dir=output_dir, agent=agent, from_pkl=from_pkl, from_sgf=from_sgf, from_json=from_json, mask_from_sgf=True, cgt_engine=True)
+                except Exception as e:
+                    print(f"Error while processing {position}:")
+                    print(traceback.format_exc())
+                    # raise e
     

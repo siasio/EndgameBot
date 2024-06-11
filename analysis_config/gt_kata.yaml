@@ -1,0 +1,20 @@
+evaluator: katago
+mask:
+  from: sgf
+  marker: SQ
+moves:
+  from: sgf
+score:
+  from: evaluator
+evaluator_kwargs:
+  kg_batch_size: 1
+  katago: C:\Users\Casablanca\katago\katago.exe
+  altcommand: ""
+  model: C:\Users\Casablanca\katago\kata1-b18c384nbt-s6582191360-d3422816034.bin.gz
+  config: analysis_config\analysis_example.cfg
+  threads: 1
+  max_visits: 1
+  fast_visits: 1
+  max_time: 8.0
+  wide_root_noise: 0.0
+  _enable_ownership: True

@@ -1,6 +1,14 @@
 # Endgame Bot
 A codebase for Stanisław Frejlak's master's thesis "Deep learning and combinatorial game theory; evaluating temperatures in the game of go".
 
+##
+
+This README needs to be updated. I introduced major changes to the repo in June 2024.
+Now the codebase is more structured. Evaluation of the program is done using `benchmark.py` script.
+The old `visualize.py` script has not yet been adjusted to the new changes.
+
+Current code uses `cgt_engine` as a dependency. This repository will be made publicly available soon.
+
 ## Installation
 
 Clone this repository to your local machine. The repository uses one submodule: [my fork](https://github.com/siasio/a0-jax) of the `a0-jax` [repository](https://github.com/NTT123/a0-jax). If after cloning the current repository, the `a0-jax` directory remains empty, navigate to the current repository root and run: `git clone https://github.com/siasio/a0-jax`.

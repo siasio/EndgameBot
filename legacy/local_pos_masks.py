@@ -1,14 +1,11 @@
 # from build_tree import PositionTree
-from sgf_parser import Move
+from sgf_utils.sgf_parser import Move
 import numpy as np
 import jax.numpy as jnp
 from jax.nn import softmax
-from game import BaseGame, KaTrainSGF
-from utils import stack_last_state
-import time
+from sgf_utils.game import BaseGame, KaTrainSGF
+from jax_utils import stack_last_state
 import random
-import os
-from scipy.signal import convolve2d
 
 # os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = '.79'
 
@@ -139,6 +136,7 @@ class AnalyzedPosition:
                            for x in range(self.pad_size)])
         # self.stones = stones
         self.stacked_pos = stack_last_state(np.array(stones))
+        self.name = None
 
     @property
     def stones(self):

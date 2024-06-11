@@ -1,16 +1,14 @@
 import os
 import random
 
-from sgf_parser import SGF, SGFNode, Move
-from game import BaseGame, KaTrainSGF
-from game_node import GameNode
-from engine import KataGoEngine
-from base_katrain import KaTrainBase
+from sgf_utils.game import BaseGame, KaTrainSGF
+from sgf_utils.game_node import GameNode
+from sgf_utils.engine import KataGoEngine
+from sgf_utils.base_katrain import KaTrainBase
 import json
-import time
 from simplify_log import simplify_log
 
-config_path = r"config.json"
+config_path = r"../config.json"
 
 with open(config_path, 'r') as f:
     config = json.load(f)

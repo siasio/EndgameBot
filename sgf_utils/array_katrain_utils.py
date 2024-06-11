@@ -1,6 +1,6 @@
 import numpy as np
 
-from sgf_parser import SGFNode, Move
+from sgf_utils.sgf_parser import SGFNode, Move
 
 number_to_color = {1: "B", -1: "W"}
 

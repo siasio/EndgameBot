@@ -1,23 +1,21 @@
 import os
-import shutil
 import sys
 
-from kivy import Config
-from kivy.storage.jsonstore import JsonStore
+# from kivy import Config
+# from kivy.storage.jsonstore import JsonStore
 
-from constants import (
+from sgf_utils.constants import (
     PLAYER_HUMAN,
     PLAYER_AI,
     PLAYING_NORMAL,
     PLAYING_TEACHING,
     OUTPUT_INFO,
     OUTPUT_ERROR,
-    OUTPUT_DEBUG,
     AI_DEFAULT,
     CONFIG_MIN_VERSION,
     DATA_FOLDER,
 )
-from katrain_utils import find_package_resource
+from sgf_utils.katrain_utils import find_package_resource
 
 
 class Player:
@@ -61,7 +59,7 @@ def parse_version(s):
 
 
 class KaTrainBase:
-    USER_CONFIG_FILE = os.path.expanduser(os.path.join(DATA_FOLDER, "config.json"))
+    USER_CONFIG_FILE = os.path.expanduser(os.path.join(DATA_FOLDER, "../config.json"))
     PACKAGE_CONFIG_FILE = "katrain/config.json"
 
     """Settings, logging, and players functionality, so other classes like bots who need a katrain instance can be used without a GUI"""
@@ -71,13 +69,13 @@ class KaTrainBase:
         self.game = None
 
         self.logger = lambda message, level=OUTPUT_INFO: self.log(message, level)
-        self.config_file = self._load_config(force_package_config=force_package_config)
-        self.debug_level = self.config("general/debug_level", OUTPUT_INFO) if debug_level is None else debug_level
+        # self.config_file = self._load_config(force_package_config=force_package_config)
+        # self.debug_level = self.config("general/debug_level", OUTPUT_INFO) if debug_level is None else debug_level
 
-        Config.set("kivy", "log_level", "warning")
-        if self.debug_level >= OUTPUT_DEBUG:
-            Config.set("kivy", "log_enable", 1)
-            Config.set("kivy", "log_level", "debug")
+        # Config.set("kivy", "log_level", "warning")
+        # if self.debug_level >= OUTPUT_DEBUG:
+        #     Config.set("kivy", "log_enable", 1)
+        #     Config.set("kivy", "log_level", "debug")
                # if self.debug_level >= OUTPUT_EXTRA_DEBUG:
                #     Config.set("kivy", "log_level", "trace")
         self.players_info = {"B": Player("B"), "W": Player("W")}
@@ -94,7 +92,7 @@ class KaTrainBase:
             config_file = os.path.abspath(sys.argv[1])
             self.log(f"Using command line config file {config_file}", OUTPUT_INFO)
         else:
-            user_config_file = find_package_resource('config.json')  # self.USER_CONFIG_FILE)
+            user_config_file = find_package_resource('../config.json')  # self.USER_CONFIG_FILE)
             # package_config_file = find_package_resource(self.PACKAGE_CONFIG_FILE)
             if force_package_config:
                 config_file = None  # package_config_file
@@ -124,7 +122,7 @@ class KaTrainBase:
                     config_file = user_config_file
                     self.log(f"Using user config file {config_file}", OUTPUT_INFO)
                 except Exception as e:
-                    config_file = package_config_file
+                    # config_file = package_config_file
                     self.log(
                         f"Using package config file {config_file} (exception {e} occurred when finding or creating user config)",
                         OUTPUT_INFO,

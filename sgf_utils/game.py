@@ -1,10 +1,8 @@
-import copy
 import math
 import os
-import re
 import threading
 from datetime import datetime
-from typing import Dict, List, Optional, Union, TypeVar, Generic
+from typing import Dict, List, Optional, TypeVar, Generic
 
 # from kivy.clock import Clock
 
@@ -28,9 +26,9 @@ from typing import Dict, List, Optional, Union, TypeVar, Generic
 #     PRIORITY_DEFAULT,
 # )
 # from katrain.core.game_node import GameNode
-from sgf_parser import SGF, Move
-from katrain_utils import var_to_grid
-from game_node import GameNode
+from sgf_utils.sgf_parser import SGF, Move
+from sgf_utils.katrain_utils import var_to_grid
+from sgf_utils.game_node import GameNode
 
 T = TypeVar('T', bound=GameNode)
 
@@ -117,6 +115,7 @@ class BaseGame(Generic[T]):
             shortcut_id = node.get_property("KTSF", None)
             if shortcut_id and shortcut_id in shortcut_id_to_node:
                 shortcut_id_to_node[shortcut_id].add_shortcut(node)
+        self.root.stones = self.stones
 
     # -- move tree functions --
     def _init_state(self):
@@ -172,7 +171,7 @@ class BaseGame(Generic[T]):
             return
 
         if self.board[move.coords[1]][move.coords[0]] != -1:
-            print(move.coords[1], move.coords[0])
+            # print("Illegal", move.coords[1], move.coords[0])
             raise IllegalMoveException("Space occupied")
 
         # merge chains connected by this move, or create a new one
@@ -204,8 +203,8 @@ class BaseGame(Generic[T]):
         # suicide: check rules and throw exception if needed
         if -1 not in neighbours(self.chains[this_chain]):
             # rules = self.rules
-            # if len(self.chains[this_chain]) == 1:  # even in new zealand rules, single stone suicide is not allowed
-            #     raise IllegalMoveException("Single stone suicide")
+            if len(self.chains[this_chain]) == 1:  # even in new zealand rules, single stone suicide is not allowed
+                raise IllegalMoveException("Single stone suicide")
             # elif (isinstance(rules, str) and rules in ["tromp-taylor", "new zealand"]) or (
             #     isinstance(rules, dict) and rules.get("suicide", False)
             # ):
@@ -234,6 +233,7 @@ class BaseGame(Generic[T]):
         with self._lock:
             played_node = self.current_node.play(move)
             self.current_node = played_node
+        self.current_node.stones = self.stones
         return played_node
 
     # Insert a list of moves from root, often just adding one.

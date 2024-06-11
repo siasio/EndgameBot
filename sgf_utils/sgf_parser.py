@@ -4,6 +4,8 @@ import math
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
 
+import numpy as np
+
 
 class ParseError(Exception):
     """Exception raised on a parse error"""
@@ -45,7 +47,10 @@ class Move:
         return f"Move({self.player}{self.gtp()})"
 
     def __eq__(self, other):
-        return self.coords == other.coords and self.player == other.player
+        coords_equal = self.coords == other.coords
+        if isinstance(coords_equal, np.ndarray):
+            coords_equal = all(coords_equal)
+        return coords_equal and self.player == other.player
 
     def gtp(self):
         """Returns GTP coordinates of the move"""

@@ -2,26 +2,25 @@ from __future__ import annotations
 
 import sys
 import threading
-import time
 import traceback
 
 import cloudpickle
 from PyQt5 import QtGui, QtCore, QtWidgets
-from PyQt5.QtCore import Qt, QPoint, QRectF, QPointF, QSettings, QMutexLocker, QMutex, QTimer, QSize, QSizeF, QLineF
-from PyQt5.QtGui import QColor, QPainter, QPen, QBrush, QFont, QPalette, QKeySequence, QPolygonF
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QLabel, QHBoxLayout, QAction, QShortcut, QVBoxLayout, \
+from PyQt5.QtCore import Qt, QPoint, QRectF, QPointF, QSettings, QMutexLocker, QMutex, QTimer, QSizeF, QLineF
+from PyQt5.QtGui import QColor, QPainter, QPen, QBrush, QFont, QKeySequence, QPolygonF
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QLabel, QHBoxLayout, QShortcut, QVBoxLayout, \
     QPushButton, QFileDialog, QCheckBox, QRadioButton, QButtonGroup, QToolButton, QFrame, QGraphicsWidget, \
-    QGraphicsLinearLayout, QGridLayout, QGraphicsAnchorLayout, QGraphicsProxyWidget, QGraphicsView, \
-    QStyleOptionGraphicsItem, QGraphicsAnchor, QGraphicsItem, QSlider, QSpinBox
-from sgf_parser import Move
+    QGraphicsView, \
+    QStyleOptionGraphicsItem, QGraphicsItem, QSpinBox
+from sgf_utils.sgf_parser import Move
 import json
 import os
-from local_pos_masks import AnalyzedPosition
+from legacy.local_pos_masks import AnalyzedPosition
 import pickle
 from policies.resnet_policy import TransferResnet, ResnetPolicyValueNet128
 import numpy as np
 
-from build_tree import PositionTree, LocalPositionNode, NextMovePlayer
+from legacy.build_tree import PositionTree, LocalPositionNode, NextMovePlayer
 
 # Define the size of the Go board
 BOARD_SIZE = 19

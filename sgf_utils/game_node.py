@@ -1,24 +1,13 @@
-import base64
-import copy
-import gzip
-import json
-import re
 import random
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
-from constants import (
-    ANALYSIS_FORMAT_VERSION,
-    PROGRAM_NAME,
+from sgf_utils.constants import (
     REPORT_DT,
-    SGF_INTERNAL_COMMENTS_MARKER,
-    SGF_SEPARATOR_MARKER,
-    VERSION,
     PRIORITY_DEFAULT,
     ADDITIONAL_MOVE_ORDER,
 )
 # from katrain.core.lang import i18n
-from sgf_parser import Move, SGFNode
-from katrain_utils import var_to_grid   # evaluation_class, pack_floats, unpack_floats, var_to_grid
+from sgf_utils.sgf_parser import Move, SGFNode
 
 
 # def analysis_dumps(analysis):
@@ -53,6 +42,7 @@ class GameNode(SGFNode):
         self.analysis_from_sgf = None
         self.initial_player = player if player else "B"
         self.clear_analysis()
+        self.stones = None
 
     def add_shortcut(self, to_node):  # collapses the branch between them
         nodes = [to_node]

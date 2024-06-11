@@ -41,7 +41,6 @@ counter = 20 * max_counter
 for i, link in enumerate(soup.findAll('a')):
     ZIP_NAME = link.get('href')[2:]  # The first characters are a dot and a slash
     _FULLURL = _URL_PARENT + '/' + ZIP_NAME
-    # print(_FULLURL)
     if ZIP_NAME.endswith('.zip') and ZIP_NAME[0] == 'b' and ZIP_NAME[1] != '6' and ZIP_NAME[1:3] != '10' and not ZIP_NAME[:-4] in already_analysed:
         try:
             counter += 1
@@ -81,13 +80,3 @@ for i, link in enumerate(soup.findAll('a')):
         finally:
             with open("analysed_list.log", "w") as f:
                 f.write(' '.join(already_analysed))
-
-# names_urls = zip(names, urls)
-
-# for name, url in names_urls:
-#     print(url)
-#     rq = urllib2.Request(url)
-#     res = urllib2.urlopen(rq)
-#     pdf = open("pdfs/" + name, 'wb')
-#     pdf.write(res.read())
-#     pdf.close()

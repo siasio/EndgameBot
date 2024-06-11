@@ -1,9 +1,9 @@
 import os
 from typing import Optional, Tuple, List
 
-from game import BaseGame, KaTrainSGF
-from game_node import GameNode
-from sgf_parser import SGFNode
+from sgf_utils.game import BaseGame, KaTrainSGF
+from sgf_utils.game_node import GameNode
+from sgf_utils.sgf_parser import SGFNode
 
 
 # import argparse

@@ -1,0 +1,14 @@
+evaluator: a0jax
+mask:
+  from: sgf
+  marker: SQ
+moves:
+  from: evaluator
+  strategy: estimateunlikely  # Could be also 'threshold', 'best' or 'best+threshold'
+  threshold: 0.1
+  no_move_threshold: 0.4
+score:
+  from: evaluator
+evaluator_kwargs:
+  model_ckpt: conv1x1-pretr-0405b-final.ckpt
+  a0_batch_size: 16
