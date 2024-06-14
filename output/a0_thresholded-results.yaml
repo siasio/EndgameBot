@@ -1,0 +1,605 @@
+correct_count: 28
+error_count: 65
+no_gt_count: 0
+num_positions: 100
+results_per_pos:
+  01-value-of-move\01.sgf:
+    correct: true
+    depth: 0
+    gt: 3.0
+    iterations: 4
+    temp: 3.0
+  01-value-of-move\02.sgf:
+    correct: true
+    depth: 0
+    gt: 6.0
+    iterations: 2
+    temp: 6.0
+  01-value-of-move\03.sgf:
+    correct: true
+    depth: 0
+    gt: 3.0
+    iterations: 15
+    temp: 3.0
+  01-value-of-move\04.sgf:
+    correct: true
+    depth: 0
+    gt: 1.0
+    iterations: 10
+    temp: 1.0
+  01-value-of-move\05.sgf:
+    correct: false
+    depth: 0
+    gt: 14.0
+    iterations: null
+    temp: null
+  01-value-of-move\06.sgf:
+    correct: true
+    depth: 0
+    gt: 4.0
+    iterations: 40
+    temp: 4.0
+  01-value-of-move\07.sgf:
+    correct: false
+    depth: 0
+    gt: 4.0
+    iterations: 2
+    temp: 5.0
+  01-value-of-move\08.sgf:
+    correct: true
+    depth: 0
+    gt: 4.0
+    iterations: 16
+    temp: 4.0
+  01-value-of-move\09.sgf:
+    correct: false
+    depth: 1
+    gt: 6.0
+    iterations: null
+    temp: null
+  01-value-of-move\10.sgf:
+    correct: false
+    depth: 5
+    gt: 5.0
+    iterations: null
+    temp: null
+  01-value-of-move\11.sgf:
+    correct: true
+    depth: 0
+    gt: 8.0
+    iterations: 7
+    temp: 8.0
+  01-value-of-move\12.sgf:
+    correct: true
+    depth: 0
+    gt: 10.0
+    iterations: 30
+    temp: 10.0
+  02-expected-local-result\01.sgf:
+    correct: false
+    depth: 5
+    gt: 8.0
+    iterations: null
+    temp: null
+  02-expected-local-result\02.sgf:
+    correct: false
+    depth: 6
+    gt: 6.0
+    iterations: null
+    temp: null
+  02-expected-local-result\03.sgf:
+    correct: false
+    depth: 7
+    gt: 6.0
+    iterations: null
+    temp: null
+  02-expected-local-result\04.sgf:
+    correct: false
+    depth: 5
+    gt: 4.0
+    iterations: null
+    temp: null
+  02-expected-local-result\05.sgf:
+    correct: false
+    depth: 0
+    gt: 9.0
+    iterations: 9
+    temp: 8.0
+  02-expected-local-result\06.sgf:
+    correct: false
+    depth: 5
+    gt: 10.0
+    iterations: null
+    temp: null
+  02-expected-local-result\07.sgf:
+    correct: false
+    depth: 6
+    gt: 7.0
+    iterations: null
+    temp: null
+  02-expected-local-result\08.sgf:
+    correct: true
+    depth: 0
+    gt: 8.0
+    iterations: 22
+    temp: 8.0
+  02-expected-local-result\09.sgf:
+    correct: false
+    depth: 4
+    gt: 6.0
+    iterations: null
+    temp: null
+  02-expected-local-result\10.sgf:
+    correct: false
+    depth: 5
+    gt: 12.0
+    iterations: null
+    temp: null
+  02-expected-local-result\11.sgf:
+    correct: false
+    depth: 6
+    gt: 8.0
+    iterations: null
+    temp: null
+  02-expected-local-result\12.sgf:
+    correct: false
+    depth: 0
+    gt: 6.5
+    iterations: 45
+    temp: 6.944444444444443
+  03-addition-method\01.sgf:
+    correct: true
+    depth: 0
+    gt: 7.0
+    iterations: 3
+    temp: 7.0
+  03-addition-method\02.sgf:
+    correct: true
+    depth: 0
+    gt: 6.0
+    iterations: 10
+    temp: 6.0
+  03-addition-method\03.sgf:
+    correct: true
+    depth: 0
+    gt: 8.0
+    iterations: 5
+    temp: 8.0
+  03-addition-method\04.sgf:
+    correct: false
+    depth: 9
+    gt: 15.0
+    iterations: null
+    temp: null
+  03-addition-method\05.sgf:
+    correct: false
+    depth: 8
+    gt: 6.0
+    iterations: null
+    temp: null
+  03-addition-method\06.sgf:
+    correct: false
+    depth: 2
+    gt: 7.5
+    iterations: null
+    temp: null
+  03-addition-method\07.sgf:
+    correct: true
+    depth: 0
+    gt: 18.0
+    iterations: 42
+    temp: 18.0
+  03-addition-method\08.sgf:
+    correct: false
+    depth: 7
+    gt: 9.0
+    iterations: null
+    temp: null
+  03-addition-method\09.sgf:
+    correct: false
+    depth: 6
+    gt: 12.0
+    iterations: null
+    temp: null
+  03-addition-method\10.sgf:
+    correct: false
+    depth: 3
+    gt: 8.0
+    iterations: null
+    temp: null
+  03-addition-method\11.sgf:
+    correct: false
+    depth: 6
+    gt: 14.0
+    iterations: null
+    temp: null
+  03-addition-method\12.sgf:
+    correct: false
+    depth: 7
+    gt: 21.5
+    iterations: null
+    temp: null
+  04-value-of-reverse-sente\01.sgf:
+    correct: true
+    depth: 0
+    gt: 2.0
+    iterations: 14
+    temp: 2.0
+  04-value-of-reverse-sente\02.sgf:
+    correct: true
+    depth: 0
+    gt: 2.0
+    iterations: 19
+    temp: 2.0
+  04-value-of-reverse-sente\03.sgf:
+    correct: false
+    depth: 0
+    gt: 6.0
+    iterations: 82
+    temp: 5.333333333333333
+  04-value-of-reverse-sente\04.sgf:
+    correct: false
+    depth: 5
+    gt: 6.0
+    iterations: null
+    temp: null
+  04-value-of-reverse-sente\05.sgf:
+    correct: false
+    depth: 7
+    gt: 10.0
+    iterations: null
+    temp: null
+  04-value-of-reverse-sente\06.sgf:
+    correct: false
+    depth: 6
+    gt: 8.0
+    iterations: null
+    temp: null
+  04-value-of-reverse-sente\07.sgf:
+    correct: true
+    depth: 0
+    gt: 3.0
+    iterations: 19
+    temp: 3.0
+  04-value-of-reverse-sente\08.sgf:
+    correct: false
+    depth: 7
+    gt: 4.0
+    iterations: null
+    temp: null
+  04-value-of-reverse-sente\09.sgf:
+    correct: false
+    depth: 5
+    gt: 6.0
+    iterations: null
+    temp: null
+  04-value-of-reverse-sente\10.sgf:
+    correct: false
+    depth: 7
+    gt: 10.666666666666666
+    iterations: null
+    temp: null
+  04-value-of-reverse-sente\11.sgf:
+    correct: false
+    depth: 10
+    gt: 13.0
+    iterations: null
+    temp: null
+  04-value-of-reverse-sente\12.sgf:
+    correct: false
+    depth: 8
+    gt: 18.0
+    iterations: null
+    temp: null
+  05-what-is-sente\01.sgf:
+    correct: true
+    depth: 0
+    gt: 7.5
+    iterations: 5
+    temp: 7.5
+  05-what-is-sente\02.sgf:
+    correct: true
+    depth: 0
+    gt: 2.0
+    iterations: 16
+    temp: 2.0
+  05-what-is-sente\03.sgf:
+    correct: false
+    depth: 5
+    gt: 2.0
+    iterations: null
+    temp: null
+  05-what-is-sente\04.sgf:
+    correct: false
+    depth: 0
+    gt: 10.5
+    iterations: 3
+    temp: 11.5
+  05-what-is-sente\05.sgf:
+    correct: false
+    depth: 8
+    gt: 8.0
+    iterations: null
+    temp: null
+  05-what-is-sente\06.sgf:
+    correct: true
+    depth: 0
+    gt: 5.0
+    iterations: 28
+    temp: 5.0
+  05-what-is-sente\07.sgf:
+    correct: false
+    depth: 8
+    gt: 5.0
+    iterations: null
+    temp: null
+  05-what-is-sente\08.sgf:
+    correct: false
+    depth: 4
+    gt: 6.0
+    iterations: null
+    temp: null
+  05-what-is-sente\09.sgf:
+    correct: false
+    depth: 5
+    gt: 8.0
+    iterations: null
+    temp: null
+  05-what-is-sente\10.sgf:
+    correct: false
+    depth: 5
+    gt: 5.5
+    iterations: null
+    temp: null
+  05-what-is-sente\11.sgf:
+    correct: false
+    depth: 8
+    gt: 10.0
+    iterations: null
+    temp: null
+  05-what-is-sente\12.sgf:
+    correct: false
+    depth: 4
+    gt: 11.0
+    iterations: null
+    temp: null
+  06-value-of-ko\01.sgf:
+    correct: false
+    depth: 10
+    gt: 12.0
+    iterations: null
+    temp: null
+  06-value-of-ko\02.sgf:
+    correct: true
+    depth: 0
+    gt: 1.3333333333333333
+    iterations: 18
+    temp: 1.3333333333333335
+  06-value-of-ko\03.sgf:
+    correct: false
+    depth: 0
+    gt: 6.0
+    iterations: null
+    temp: null
+  06-value-of-ko\04.sgf:
+    correct: false
+    depth: 5
+    gt: 2.6666666666666665
+    iterations: null
+    temp: null
+  06-value-of-ko\05.sgf:
+    correct: true
+    depth: 0
+    gt: 3.3333333333333335
+    iterations: 8
+    temp: 3.333333333333333
+  06-value-of-ko\06.sgf:
+    correct: false
+    depth: 8
+    gt: 1.3333333333333333
+    iterations: null
+    temp: null
+  06-value-of-ko\07.sgf:
+    correct: false
+    depth: 5
+    gt: 0.6666666666666666
+    iterations: null
+    temp: null
+  06-value-of-ko\08.sgf:
+    correct: true
+    depth: 0
+    gt: 3.5555555555555554
+    iterations: 5
+    temp: 3.5555555555555562
+  06-value-of-ko\09.sgf:
+    correct: true
+    depth: 0
+    gt: 3.3333333333333335
+    iterations: 21
+    temp: 3.333333333333332
+  06-value-of-ko\10.sgf:
+    correct: false
+    depth: 5
+    gt: 6.0
+    iterations: null
+    temp: null
+  06-value-of-ko\11.sgf:
+    correct: false
+    depth: 7
+    gt: 3.3333333333333335
+    iterations: null
+    temp: null
+  06-value-of-ko\12.sgf:
+    correct: true
+    depth: 0
+    gt: 10.0
+    iterations: 51
+    temp: 10.0
+  07-subtraction-method\01.sgf:
+    correct: true
+    depth: 0
+    gt: 4.5
+    iterations: 5
+    temp: 4.5
+  07-subtraction-method\02.sgf:
+    correct: false
+    depth: 10
+    gt: 13.5
+    iterations: null
+    temp: null
+  07-subtraction-method\03.sgf:
+    correct: false
+    depth: 0
+    gt: 5.5
+    iterations: 16
+    temp: 4.0
+  07-subtraction-method\04.sgf:
+    correct: true
+    depth: 0
+    gt: 3.0
+    iterations: 17
+    temp: 3.0
+  07-subtraction-method\05.sgf:
+    correct: false
+    depth: 0
+    gt: 10.0
+    iterations: 7
+    temp: 8.0
+  07-subtraction-method\06.sgf:
+    correct: false
+    depth: 5
+    gt: 2.3333333333333335
+    iterations: null
+    temp: null
+  07-subtraction-method\07.sgf:
+    correct: false
+    depth: 6
+    gt: 2.6666666666666665
+    iterations: null
+    temp: null
+  07-subtraction-method\08.sgf:
+    correct: false
+    depth: 5
+    gt: 11.0
+    iterations: null
+    temp: null
+  07-subtraction-method\09.sgf:
+    correct: false
+    depth: 5
+    gt: 3.1666666666666665
+    iterations: null
+    temp: null
+  07-subtraction-method\10.sgf:
+    correct: false
+    depth: 10
+    gt: 4.666666666666667
+    iterations: null
+    temp: null
+  07-subtraction-method\11.sgf:
+    correct: true
+    depth: 0
+    gt: 2.1666666666666665
+    iterations: 14
+    temp: 2.166666666666667
+  07-subtraction-method\12.sgf:
+    correct: false
+    depth: 3
+    gt: 14.75
+    iterations: null
+    temp: null
+  08-common-positions\01.sgf:
+    correct: false
+    depth: 8
+    gt: 8.0
+    iterations: null
+    temp: null
+  08-common-positions\02.sgf:
+    correct: false
+    depth: 6
+    gt: 10.0
+    iterations: null
+    temp: null
+  08-common-positions\03.sgf:
+    correct: false
+    depth: 4
+    gt: 6.0
+    iterations: null
+    temp: null
+  08-common-positions\04.sgf:
+    correct: false
+    depth: 7
+    gt: 4.666666666666667
+    iterations: null
+    temp: null
+  08-common-positions\05.sgf:
+    correct: false
+    depth: 10
+    gt: 2.6666666666666665
+    iterations: null
+    temp: null
+  08-common-positions\06.sgf:
+    correct: false
+    depth: 5
+    gt: 4.166666666666667
+    iterations: null
+    temp: null
+  08-common-positions\07.sgf:
+    correct: false
+    depth: 5
+    gt: 14.0
+    iterations: null
+    temp: null
+  08-common-positions\08.sgf:
+    correct: false
+    depth: 6
+    gt: 8.333333333333334
+    iterations: null
+    temp: null
+  08-common-positions\09.sgf:
+    correct: false
+    depth: 5
+    gt: 4.666666666666667
+    iterations: null
+    temp: null
+  08-common-positions\10.sgf:
+    correct: false
+    depth: 8
+    gt: 2.4444444444444446
+    iterations: null
+    temp: null
+  08-common-positions\11.sgf:
+    correct: false
+    depth: 8
+    gt: 4.666666666666667
+    iterations: null
+    temp: null
+  08-common-positions\12.sgf:
+    correct: true
+    depth: 0
+    gt: 1.6666666666666665
+    iterations: 14
+    temp: 1.666666666666666
+  08-common-positions\13.sgf:
+    correct: false
+    depth: 9
+    gt: 8.0
+    iterations: null
+    temp: null
+  08-common-positions\14.sgf:
+    correct: false
+    depth: 10
+    gt: 8.0
+    iterations: null
+    temp: null
+  08-common-positions\15.sgf:
+    correct: false
+    depth: 5
+    gt: 5.333333333333333
+    iterations: null
+    temp: null
+  08-common-positions\16.sgf:
+    correct: false
+    depth: 6
+    gt: 5.0
+    iterations: null
+    temp: null
