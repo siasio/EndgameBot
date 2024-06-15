@@ -204,9 +204,6 @@ class PositionTree(BaseGame[LocalPositionNode]):
                 engine = self.eval.evaluator_registry.pop(key)
                 engine.shutdown()
 
-    def play(self, move: Move, ignore_ko: bool = False, max_depth=20):
-        super().play(move=move, ignore_ko=ignore_ko)
-
     # def reset_tree(self):
     #     self.current_node.children = []
     #     self.current_node.is_initialized = False
@@ -216,7 +213,6 @@ class PositionTree(BaseGame[LocalPositionNode]):
         arr = np.zeros(self.board_size)
         for s in node.properties[self.config['mask']['marker']]:
             arr[Move.SGF_COORD.index(s[0])][self.board_size[1] - Move.SGF_COORD.index(s[1]) - 1] = 1
-            # arr[s.coords[0]][s.coords[1]] = 1
         return arr
 
     def get_position(self):
@@ -230,15 +226,8 @@ class PositionTree(BaseGame[LocalPositionNode]):
 
     @staticmethod
     def position_as_string(position: np.ndarray):
-        def intersection_as_string(color) -> str:
-            color = int(color)
-            if color == 0:
-                return "."
-            elif color == 1:
-                return "X"
-            elif color == -1:
-                return "O"
-        return "\n".join(["".join(list(map(lambda x: intersection_as_string(x), row))) for row in position])
+        intersection_to_str = {0: ".", 1: "X", -1: "O"}
+        return "\n".join(["".join(list(map(lambda x: intersection_to_str[int(x)], row))) for row in position])
 
     @staticmethod
     def best_move(predictions, color) -> Move:
@@ -297,8 +286,8 @@ class PyQtPositionTree(PositionTree, QThread):
         self.parent_widget.stone_numbers[self.current_node.move.coords[0]][self.current_node.move.coords[1]] = None
         super().undo(n_times=n_times, stop_on_mistake=stop_on_mistake)
 
-    def play(self, move: Move, ignore_ko: bool = False, max_depth=8):
-        super().play(move, ignore_ko, max_depth)
+    def play(self, move: Move, ignore_ko: bool = False):
+        super().play(move, ignore_ko)
 
         self.parent_widget.last_number += 1
         self.parent_widget.stone_numbers[self.current_node.move.coords[0]][
