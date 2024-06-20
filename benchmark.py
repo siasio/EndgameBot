@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import time
 import traceback
@@ -27,12 +28,13 @@ def get_ground_truth(position_tree: PositionTree):
     return value
 
 
-def find_temp(gtp_position, config, max_depth=20):
+def find_temp(gtp_position, config, max_depth=20, output_sgf_path=None, output_json_path=None):
     game_name = os.path.basename(gtp_position)
     root_node: LocalPositionNode = LocalPositionSGF.parse_file(gtp_position)
     position_tree = PositionTree(root_node, config=config, game_name=game_name)
     gt = get_ground_truth(position_tree)
     value = None
+    temp = None
     try:
         position_tree.build_tree(max_depth=max_depth)
         temp = float(position_tree.root.cgt_game.temp)
@@ -40,13 +42,35 @@ def find_temp(gtp_position, config, max_depth=20):
     except:
         traceback.print_exc()
     finally:
+        if output_sgf_path is not None:
+            for node in position_tree.iter_nodes():
+                try:
+                    cgt_info = node.cgt_info()
+                except Exception as e:
+                    traceback.print_exc()
+                    cgt_info = "CGT calculations failed"
+                node.set_property("C", cgt_info)
+            print(position_tree.root.get_property("C"))
+            # add_mask_to_node(position_tree.root, position_tree.mask)
+
+            position_tree.write_sgf(output_sgf_path)
+        if output_json_path is not None:
+            os.makedirs(os.path.dirname(output_json_path), exist_ok=True)
+            nodes_json_info = [node.as_json() for node in position_tree.iter_nodes()]
+            json_info = {
+                'nodes': nodes_json_info,
+                'ground_truth_temp': gt / 2 + 1,
+                'calculated_temp': temp,
+            }
+            with open(output_json_path, 'w') as f:
+                json.dump(json_info, f)
         iter_num = position_tree.iter_num
         inference_num = position_tree.inference_num
         depth = position_tree.root.expanded_tree_depth
         return gt, value, iter_num, inference_num, depth
 
 
-def almost_equal(val1, val2, threshold=0.001):
+def almost_equal(val1, val2, threshold=0.00001):
     return abs(float(val1 - val2)) <= threshold
 
 
@@ -87,7 +111,9 @@ if __name__ == '__main__':
             no_gt_count = 0
             for position in tqdm(positions):
                 try:
-                    gt, temp, iter_num, inferenece_num, depth = find_temp(position, config, args.max_depth)
+                    output_sgf = os.path.join(os.path.dirname(os.path.dirname(position)), 'analyzed', os.path.basename(os.path.dirname(position)) + '-' + os.path.basename(position))
+                    output_json = os.path.join(os.path.dirname(os.path.dirname(position)), 'analyzed_json', os.path.basename(os.path.dirname(position)) + '-' + os.path.splitext(os.path.basename(position))[0] + '.json')
+                    gt, temp, iter_num, inferenece_num, depth = find_temp(position, config, args.max_depth, output_sgf, output_json)
                     filename = position[len(selected_sgf) + 1:]
                     cur_results = {'temp': temp, 'iterations': iter_num, 'depth': depth} #, 'inferences': inferenece_num}
                     if gt is not None:

@@ -75,22 +75,12 @@ class A0KataEvaluator(AbstractEvaluator):
         super().shutdown()
 
 
-def get_position(node: GameNode):
-    arr = np.zeros(node.board_size)
-    for s in node.stones:
-        if s.player == "W":
-            arr[s.coords[0]][s.coords[1]] = - 1
-        else:
-            arr[s.coords[0]][s.coords[1]] = 1
-    return arr
-
-
 def stack_pos(node: GameNode):
     x, y = node.board_size
     previous_positions = []
     current_player = None
     while True:
-        previous_positions.append(get_position(node))
+        previous_positions.append(node.stones)
         if len(previous_positions) >= 8 or node.parent is None or node.player == current_player:
             break
         current_player = node.player

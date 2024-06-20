@@ -23,6 +23,8 @@ class PositionTree(BaseGame[LocalPositionNode]):
         self.game_name = game_name
         self.iter_num = None
         self.inference_num = None
+        self._arr = None
+        self.built_tree = False
         if config['mask']['from'] == 'sgf':
             self.mask = self.get_mask(self.root)
         else:
@@ -61,7 +63,6 @@ class PositionTree(BaseGame[LocalPositionNode]):
             # Pick child for which expanded_tree_depth is the lowest
             # print([child.move for child in self.current_node.unfinished_children])
             node = min(self.current_node.unfinished_children, key=lambda x: x.expanded_tree_depth)
-
             try:
                 self.play(node.move, ignore_ko=False)
             except game.IllegalMoveException as e:
@@ -78,6 +79,10 @@ class PositionTree(BaseGame[LocalPositionNode]):
                     self.current_node.children = [ch for ch in self.current_node.children if ch.move != node.move]
                 else:
                     raise e
+
+    def eval_for_node(self, node: LocalPositionNode = None) -> Evaluation:
+        node = node or self.current_node
+        return self.eval(node, self.mask, self.evaluator_name, **self.config['evaluator_kwargs'])
 
     def expand_node(self, evaluation: Evaluation):
         strategy = self.config['moves'].get('strategy', None)
@@ -138,8 +143,7 @@ class PositionTree(BaseGame[LocalPositionNode]):
                 # cur_evaluator.add_to_queue(new_evaluation)
                 if strategy == 'estimateunlikely':
                     if move_to_estimate is not None and move == move_to_estimate:
-                        estimated_eval: Evaluation = self.eval(self.current_node, self.mask, self.evaluator_name,
-                                                               **self.config['evaluator_kwargs'])
+                        estimated_eval: Evaluation = self.eval_for_node(self.current_node)
                         self.current_node.visited = True
                         estimated_eval.quantize_ownership = False
                         self.current_node.set_cgt_game(estimated_eval.score)
@@ -170,7 +174,7 @@ class PositionTree(BaseGame[LocalPositionNode]):
             self.undo()
             self.current_node.set_cgt_game()
 
-    def build_tree(self, max_depth=None):
+    def build_tree(self, max_depth=None, delete_engine=True):
         current_depth = 0
         iterations_on_this_depth = 0
         iter_num = 0
@@ -181,7 +185,7 @@ class PositionTree(BaseGame[LocalPositionNode]):
                     pbar.set_description(f"[{self.game_name}] Depth: {str(current_depth).rjust(2)}, Iterations: {str(iterations_on_this_depth).rjust(3)}")
                     iterations_on_this_depth += 1
                     self.select_node()
-                    evaluation: Evaluation = self.eval(self.current_node, self.mask, self.evaluator_name, **self.config['evaluator_kwargs'])
+                    evaluation: Evaluation = self.eval_for_node(self.current_node)
                     if max_depth is not None and current_depth >= max_depth:
                         pass
                         # print(f"Reached max tree depth ({current_depth})")
@@ -199,15 +203,18 @@ class PositionTree(BaseGame[LocalPositionNode]):
             self.iter_num = iter_num
             self.inference_num = self.eval.get_evaluator(self.evaluator_name, **self.config['evaluator_kwargs']).inference_count
         finally:
-            keys = list(self.eval.evaluator_registry.keys())
-            for key in keys:
-                engine = self.eval.evaluator_registry.pop(key)
-                engine.shutdown()
+            if delete_engine:
+                keys = list(self.eval.evaluator_registry.keys())
+                for key in keys:
+                    engine = self.eval.evaluator_registry.pop(key)
+                    engine.shutdown()
+            self.built_tree = True
 
-    # def reset_tree(self):
-    #     self.current_node.children = []
-    #     self.current_node.is_initialized = False
-    #     self.current_node.finished_calculation = False
+    def reset_tree(self):
+        self.current_node.children = []
+        self.current_node.is_initialized = False
+        self.current_node.finished_calculation = False
+        self._arr = None
 
     def get_mask(self, node: LocalPositionNode):
         arr = np.zeros(self.board_size)
@@ -215,14 +222,24 @@ class PositionTree(BaseGame[LocalPositionNode]):
             arr[Move.SGF_COORD.index(s[0])][self.board_size[1] - Move.SGF_COORD.index(s[1]) - 1] = 1
         return arr
 
-    def get_position(self):
-        arr = np.zeros(self.board_size)
-        for s in self.stones:
-            if s.player == "W":
-                arr[s.coords[0]][s.coords[1]] = - 1
-            else:
-                arr[s.coords[0]][s.coords[1]] = 1
-        return arr
+    def play(self, move: Move, ignore_ko: bool = False):
+        super().play(move, ignore_ko)
+        self._arr = None
+
+    def undo(self, n_times=1, stop_on_mistake=None):
+        super().undo(n_times, stop_on_mistake)
+        self._arr = None
+
+    @property
+    def arr(self):
+        if self._arr is None:
+            self._arr = np.zeros(self.board_size)
+            for s in self.stones:
+                if s.player == "W":
+                    self._arr[s.coords[0]][s.coords[1]] = - 1
+                else:
+                    self._arr[s.coords[0]][s.coords[1]] = 1
+        return self._arr
 
     @staticmethod
     def position_as_string(position: np.ndarray):
@@ -243,36 +260,16 @@ class PositionTree(BaseGame[LocalPositionNode]):
 class PyQtPositionTree(PositionTree, QThread):
     update_signal = pyqtSignal()
 
-    def __init__(self, position_node: LocalPositionNode, parent_widget, evaluator_name, game_name=None, expansion_strategy=None, max_depth=None):
+    def __init__(self, position_node: LocalPositionNode, config, parent_widget, game_name=None):
         position_node.game = self
-        PositionTree.__init__(self, position_node, game_name, evaluator_name, expansion_strategy)
+        PositionTree.__init__(self, position_node, config, game_name=game_name)
         QObject.__init__(self, parent_widget)
         self.parent_widget = parent_widget
-        self.max_depth = max_depth
+        # self.max_depth = max_depth
 
     def run(self):
         """Override run method of QThread to run calculations in the PyQt app"""
-        self.build_tree()
-
-    def build_tree(self, max_depth=None):
-        max_depth = max_depth or self.max_depth
-        current_depth = 0
-        iterations_on_this_depth = 0
-        while not self.current_node.finished_calculation:
-            iterations_on_this_depth += 1
-            self.select_node()
-            self.parent_widget.wait_for_paint_event()  # This doesn't really work, should we add update_signal.emit?
-            self.select_node()
-            self.parent_widget.wait_for_paint_event()
-            self.backup()
-            assert self.current_node == self.root, "Current node is not root after backup"
-            if self.current_node.expanded_tree_depth > current_depth:
-                current_depth = self.current_node.expanded_tree_depth
-                iterations_on_this_depth = 0
-
-            if max_depth is not None and self.current_node.expanded_tree_depth >= max_depth:
-                self.current_node.finished_calculation = True
-                # self.parent_widget.wait_for_paint_event()
+        self.build_tree(delete_engine=False)
         self.update_signal.emit()
         self.parent_widget.wait_for_paint_event()
 

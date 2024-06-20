@@ -1,5 +1,4 @@
 from cgt_engine import G, Options, L, R, both_pl
-from evaluators.abstract_evaluator import Evaluation
 from sgf_utils.game_node import GameNode
 from sgf_utils.sgf_parser import SGF
 
@@ -11,10 +10,22 @@ class LocalPositionNode(GameNode):
     def __init__(self, parent=None, properties=None, move=None, player=None):
         super().__init__(parent=parent, properties=properties, move=move, player=None)
         self.finished_calculation = False
-        self.cgt_game = None
+        self.cgt_game: G = None
         self.ko_node: KoNode = None  # Wrapper over the node for ko calculations
         self.ko_tree: KoTree = None  # There can be only one ko tree per node
         self.visited = False
+
+    def __deepcopy__(self, memodict={}):
+        new_node = LocalPositionNode()
+        new_node.parent = self.parent
+        new_node.properties = self.properties
+        new_node.children = [child.__deepcopy__() for child in self.children]
+        new_node.finished_calculation = self.finished_calculation
+        new_node.cgt_game = self.cgt_game
+        new_node.ko_node = self.ko_node
+        new_node.ko_tree = self.ko_tree
+        new_node.visited = self.visited
+        return new_node
 
     @property
     def unfinished_children(self):
@@ -26,10 +37,35 @@ class LocalPositionNode(GameNode):
         return min([child.expanded_tree_depth for child in self.unfinished_children]) + 1 if len(self.unfinished_children) > 0 else 0
 
     def cgt_info(self):
+        if self.cgt_game is None:
+            return "CGT game is None"
         temp = float(self.cgt_game.temp)
         mean = float(self.cgt_game.mean)
         value = 2 * temp - 2
-        return f"{self.cgt_game}\nMean: {mean:.2f} Temp: {temp:.2f} Value: {value:.2f}"
+        return f"{self.cgt_game}\nGame is ok? {self.cgt_game.is_ok} Mean: {mean:.2f} Temp: {temp:.2f} Value: {value:.2f}"
+
+    @property
+    def moves_str(self):
+        moves_str = str(self.move)
+        if self.parent is not None:
+            moves_str = moves_str + self.parent.moves_str
+        return moves_str
+
+    def as_json(self):
+        l_children_ids = [hash(ch.moves_str) for ch in self.children if ch.player == 'B']
+        r_children_ids = [hash(ch.moves_str) for ch in self.children if ch.player == 'W']
+        if self.ko_node is not None and not self.ko_node.is_root:
+            parent_id = hash(self.parent.moves_str)
+            if self.player == 'B':
+                r_children_ids.append(parent_id)
+            else:
+                l_children_ids.append(parent_id)
+        return {
+            "id": hash(self.moves_str),
+            "l_children": l_children_ids,
+            "r_children": r_children_ids,
+            "cgt_game": str(self.cgt_game)
+        }
 
     def set_cgt_game(self, score=None):
         self.finished_calculation = all(child.finished_calculation for child in self.children)

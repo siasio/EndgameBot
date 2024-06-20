@@ -7,12 +7,16 @@ import jax.numpy as jnp
 import numpy as np
 from jax._src.nn.functions import softmax
 
-from legacy.build_tree import color_to_pl
+from cgt_engine import L, R
 from evaluators.abstract_evaluator import AbstractEvaluator, Evaluation, pack_single_decorator
 from policies.resnet_policy import ResnetPolicyValueNet128, TransferResnet
 from sgf_utils.game_node import GameNode
 
 ownership_strict_threshold = 10
+
+
+color_to_pl = {"B": L, "W": R}
+pl_to_color = {L: "B", R: "W"}
 
 
 class A0jaxEvaluator(AbstractEvaluator):
@@ -110,22 +114,12 @@ class A0jaxEvaluator(AbstractEvaluator):
         # print(len(self.done_queue), len(self.eval_queue))
 
 
-def get_position(node: GameNode):
-    arr = np.zeros(node.board_size)
-    for s in node.stones:
-        if s.player == "W":
-            arr[s.coords[0]][s.coords[1]] = - 1
-        else:
-            arr[s.coords[0]][s.coords[1]] = 1
-    return arr
-
-
 def stack_pos(node: GameNode):
     x, y = node.board_size
     previous_positions = []
     current_player = None
     while True:
-        previous_positions.append(get_position(node))
+        previous_positions.append(node.stones)
         if len(previous_positions) >= 8 or node.parent is None or node.player == current_player:
             break
         current_player = node.player

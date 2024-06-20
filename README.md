@@ -3,9 +3,10 @@ A codebase for Stanisław Frejlak's master's thesis "Deep learning and combinato
 
 ##
 
-This README needs to be updated. I introduced major changes to the repo in June 2024.
-Now the codebase is more structured. Evaluation of the program is done using `benchmark.py` script.
-The old `visualize.py` script has not yet been adjusted to the new changes.
+Following major changes in the repository in June 2024, the codebase has become more structured.
+Evaluation of the program is done using `benchmark.py` script.
+It is also possible to use the program through a GUI by running `visualize.py`.
+The README file should be updated to mention all the introduced changes.
 
 Current code uses `cgt_engine` as a dependency. This repository will be made publicly available soon.
 
@@ -44,13 +45,9 @@ In `train_requirements.txt`, `opencv-python-headless` is listed. If you have `op
 To use a GUI, run `visualize.py`. Press "Set up position" and put Black and White stones on the board. When "Black" is selected, you can add Black stones with mouse left-click, and White stones with right-click. When you set the position, press "Mask" and select intersections which count into the local position. After you press "Finish and analyze" a game tree for the local position will be created, and you can view it on the right-side panel. To the right of the panel some statistics will be displayed: 
  - a probability that White or Black gets the next move in the local position - ideally, we would like it to be 50-50 for positions with gote moves, 100-0 for positions with a sente move of one of the players, or if the previous move was sente, and 0-0 for finished positions
  - a local result calculated with Chinese rules, i.e. an expected difference between the number of Black's and White's intersections within the masked region
- - a value of move calculated with Japanese rules (which is twice the local temperature); something is incorrect when calculating values of reverse sente moves - should be revised
+ - a value of move calculated with Chinese rules, a.k.a. local temperature
 
-There is a basic code for managing kos (including multi-stage) which stops the algorithm from infinite tree expansion, and calculates a move value based on the initial and final position of a ko.
-![image](https://github.com/siasio/EndgameBot/assets/39811817/355dda7a-4826-4ef1-abc1-52cf44e0434b)
-
-Currently the tree is expanded using very simple heuristics. In each position, only one move for black and one move for white are taken into account (the top choices of the neural network). To assess whether the network believes that the previous move is sente, I use a 10% threshold: if the sum of softmaxed moves of one color is below 10%, then I don't take that color into account when expanding the current node. Of course, this algorithm is imperfect, and it leads to wrong assessments from time to time. An example below shows a position in which a tree for a simple position is expanded way too much because of not detecting some sente moves. The currently displayed position after two moves should obviously be judged as Black's sente. However, Black's move probability being at 11%, the tree is expanded with both White's and Black's move:
-![image](https://github.com/siasio/EndgameBot/assets/39811817/667a16c3-e298-4f1f-90da-fc20516b48ad)
+![gui_new](https://github.com/siasio/EndgameBot/assets/39811817/577926b4-a4b1-418f-912d-2176c4189780)
 
 ## Methods
 

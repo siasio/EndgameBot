@@ -4,6 +4,8 @@ import threading
 from datetime import datetime
 from typing import Dict, List, Optional, TypeVar, Generic
 
+import numpy as np
+
 # from kivy.clock import Clock
 
 # from katrain.core.constants import (
@@ -115,7 +117,16 @@ class BaseGame(Generic[T]):
             shortcut_id = node.get_property("KTSF", None)
             if shortcut_id and shortcut_id in shortcut_id_to_node:
                 shortcut_id_to_node[shortcut_id].add_shortcut(node)
-        self.root.stones = self.stones
+        self.root.stones = self.get_position()
+
+    def get_position(self):
+        arr = np.zeros(self.board_size)
+        for s in self.stones:
+            if s.player == "W":
+                arr[s.coords[0]][s.coords[1]] = - 1
+            else:
+                arr[s.coords[0]][s.coords[1]] = 1
+        return arr
 
     # -- move tree functions --
     def _init_state(self):
@@ -233,7 +244,7 @@ class BaseGame(Generic[T]):
         with self._lock:
             played_node = self.current_node.play(move)
             self.current_node = played_node
-        self.current_node.stones = self.stones
+        self.current_node.stones = self.get_position()
         return played_node
 
     # Insert a list of moves from root, often just adding one.

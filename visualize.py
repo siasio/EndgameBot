@@ -5,6 +5,7 @@ import threading
 import traceback
 
 import cloudpickle
+import yaml
 from PyQt5 import QtGui, QtCore, QtWidgets
 from PyQt5.QtCore import Qt, QPoint, QRectF, QPointF, QSettings, QMutexLocker, QMutex, QTimer, QSizeF, QLineF
 from PyQt5.QtGui import QColor, QPainter, QPen, QBrush, QFont, QKeySequence, QPolygonF
@@ -12,15 +13,17 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QLabel, QHBoxLay
     QPushButton, QFileDialog, QCheckBox, QRadioButton, QButtonGroup, QToolButton, QFrame, QGraphicsWidget, \
     QGraphicsView, \
     QStyleOptionGraphicsItem, QGraphicsItem, QSpinBox
+
+from helpers import logging_context_manager
 from sgf_utils.sgf_parser import Move
 import json
 import os
-from legacy.local_pos_masks import AnalyzedPosition
 import pickle
 from policies.resnet_policy import TransferResnet, ResnetPolicyValueNet128
 import numpy as np
 
-from legacy.build_tree import PositionTree, LocalPositionNode, NextMovePlayer
+from game_tree.position_tree import PyQtPositionTree
+from game_tree.local_position_node import LocalPositionNode, LocalPositionSGF
 
 # Define the size of the Go board
 BOARD_SIZE = 19
@@ -48,7 +51,7 @@ def qp(p):
 
 
 class GoBoard(QWidget):
-    def __init__(self, parent=None, size=19, stone_radius=20, margin=30, b_border=2, w_border=1.5, b_radius=.92,
+    def __init__(self, config='a0kata_estimated.yaml', parent=None, size=19, stone_radius=20, margin=30, b_border=2, w_border=1.5, b_radius=.92,
                  w_radius=.88, **kwargs):
         super().__init__(parent, **kwargs)
         # self.size = size
@@ -56,6 +59,8 @@ class GoBoard(QWidget):
             self.size_x, self.size_y = size
         else:
             self.size_x, self.size_y = size, size
+        self.mask = np.array([[1 for y in range(self.size_y)] for x in range(self.size_x)])
+        self.arr = np.array([[0 for y in range(self.size_y)] for x in range(self.size_x)])
         self.stone_radius = stone_radius
         self.margin = margin
         self.b_border = b_border
@@ -67,7 +72,9 @@ class GoBoard(QWidget):
                             (self.size_y - 1) * self.stone_radius * 2 + self.margin * 2)
 
         self.last_color = WHITE
-        self.position_tree = PositionTree.from_a0pos(AnalyzedPosition(), parent_widget=self)
+        with open(os.path.join('analysis_config', config), 'r') as f:
+            self.config = yaml.safe_load(f)
+        self.position_tree = PyQtPositionTree(LocalPositionNode(), config=self.config, parent_widget=self)
         # self.position_tree.goban = self
         self.reset_numbers()
         # self.show_segmentation = False
@@ -77,10 +84,8 @@ class GoBoard(QWidget):
         # self.show_black_scores = False
         # self.show_white_scores = False
         self.show_actual_move = False
-        self.local_mask = [[1 for y in range(self.a0pos.pad_size)]
-                           for x in range(self.a0pos.pad_size)]
-        self.agent = self.load_agent(os.path.join(os.getcwd(), 'models', "conv1x1-pretr-0405b-final.ckpt")) #-frozen trained_2023-12.ckpt
-        self.position_tree.load_agent(self.agent)
+        # self.agent = self.load_agent(os.path.join(os.getcwd(), 'models', "conv1x1-pretr-0405b-final.ckpt")) #-frozen trained_2023-12.ckpt
+        # self.position_tree.load_agent(self.agent)
         self.from_pkl = False
         self.default_event_handler = self.handle_default_event
         self.stone_numbers = np.array([[None for y in range(self.size_y)] for x in range(self.size_x)])
@@ -93,6 +98,7 @@ class GoBoard(QWidget):
 
         self.mutex = QMutex()
         self.paint_event_done = threading.Event()  # Initialize the event
+        self.built_tree = False
 
     def wait_for_paint_event(self):
         with QMutexLocker(self.mutex):
@@ -107,11 +113,11 @@ class GoBoard(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
-        if self.a0pos is None:
-            print("a0pos is None")
-            print("Current move", self.position_tree.current_node.move)
-            painter.end()
-            return
+        # if self.a0pos is None:
+        #     print("a0pos is None")
+        #     print("Current move", self.position_tree.current_node.move)
+        #     painter.end()
+        #     return
 
         def draw_text(x_coord, y_coord, text_to_draw):
             rect = painter.fontMetrics().boundingRect(text_to_draw)
@@ -120,10 +126,10 @@ class GoBoard(QWidget):
             painter.drawText(QPointF(cx, cy), text_to_draw)
 
         def should_show_percentage(i_coord, j_coord):
-            return not self.ownership_only_for_mask or (self.local_mask is not None and self.local_mask[i_coord][j_coord])
+            return not self.ownership_only_for_mask or (self.position_tree.mask is not None and self.position_tree.mask[i_coord][j_coord])
 
         def should_show_score(i_coord, j_coord):
-            return not self.scores_only_for_mask or (self.local_mask is not None and self.local_mask[i_coord][j_coord])
+            return not self.scores_only_for_mask or (self.position_tree.mask is not None and self.position_tree.mask[i_coord][j_coord])
 
         def ownership_to_rgb(ownership):
             return int(255 * (1 - (ownership + 1) / 2))
@@ -154,115 +160,124 @@ class GoBoard(QWidget):
         # Draw the stones and numbers
         font = QFont("Helvetica", self.stone_radius - 4)
         painter.setFont(font)
-        top_black_move = np.unravel_index(np.argmax(self.a0pos.predicted_black_next_moves, axis=None),
-                                          self.a0pos.predicted_black_next_moves.shape)
-        top_white_move = np.unravel_index(np.argmax(self.a0pos.predicted_white_next_moves, axis=None),
-                                          self.a0pos.predicted_white_next_moves.shape)
-        gt_ownership = self.position_tree.current_node.calculated_ownership if self.position_tree.current_node.calculated_ownership is not None else self.a0pos.ownership
+        if self.built_tree:
+            evaluation = self.position_tree.eval_for_node()
+            arr = self.position_tree.arr
+            mask = self.position_tree.mask
+            top_black_move = np.unravel_index(np.argmax(evaluation.black_moves, axis=None),
+                                              evaluation.black_moves.shape)
+            top_white_move = np.unravel_index(np.argmax(evaluation.white_moves, axis=None),
+                                              evaluation.white_moves.shape)
+            gt_ownership = evaluation.ownership  # self.position_tree.current_node.calculated_ownership if self.position_tree.current_node.calculated_ownership is not None else self.a0pos.ownership
+        else:
+            arr = self.arr
+            mask = self.mask
 
         for i in range(self.size_x):
             for j in range(self.size_y):
                 x = self.margin + i * self.stone_radius * 2
                 y = self.margin + j * self.stone_radius * 2
 
-                if self.a0pos.stones[i][j]:
+                if arr[i][j]:
                     # Pen is for the border of the stone so the color should be swapped.
-                    pen = QPen(QColor("white"), self.w_border, Qt.SolidLine) if self.a0pos.stones[i][
+                    pen = QPen(QColor("white"), self.w_border, Qt.SolidLine) if arr[i][
                                                                                     j] == BLACK else QPen(
                         QColor("black"), self.b_border, Qt.SolidLine)
                     painter.setPen(pen)
 
-                    color = QColor("black" if self.a0pos.stones[i][j] == BLACK else "white")
+                    color = QColor("black" if arr[i][j] == BLACK else "white")
 
                     painter.setBrush(QBrush(color))
-                    radius_to_use = self.stone_radius * self.b_radius if self.a0pos.stones[i][
+                    radius_to_use = self.stone_radius * self.b_radius if arr[i][
                                                                              j] == BLACK else self.stone_radius * self.w_radius
                     painter.drawEllipse(QPoint(x, y), radius_to_use, radius_to_use)
 
                     corresponding_number = self.stone_numbers[i][j]
                     if corresponding_number:
-                        painter.setPen(QColor("white" if self.a0pos.stones[i][j] == BLACK else "black"))
+                        painter.setPen(QColor("white" if arr[i][j] == BLACK else "black"))
                         draw_text(x, y, str(corresponding_number))
 
-                if self.a0pos.last_move is not None and i == self.a0pos.last_move[0] and j == self.a0pos.last_move[1] and self.stone_numbers[i][j] is None:
-                    painter.setBrush(QBrush(QColor("red")))
-                    radius_to_use = self.stone_radius * self.b_radius * 0.3
-                    painter.drawEllipse(QPoint(x, y), radius_to_use, radius_to_use)
+                # if self.show_gt_ownership and gt_ownership[i][j]:
+                #     rgb = ownership_to_rgb(gt_ownership[i][j])
+                #     painter.setBrush(QBrush(QColor(rgb, rgb, rgb, 127)))
+                #     painter.setPen(Qt.NoPen)
+                #     painter.drawRect(x, y, int(self.stone_radius), int(self.stone_radius))
 
-                if self.show_gt_ownership and gt_ownership[i][j]:
-                    rgb = ownership_to_rgb(gt_ownership[i][j])
-                    painter.setBrush(QBrush(QColor(rgb, rgb, rgb, 127)))
-                    painter.setPen(Qt.NoPen)
-                    painter.drawRect(x, y, int(self.stone_radius), int(self.stone_radius))
+                if self.built_tree:
+                    if self.position_tree.current_node.move is not None and \
+                            i == self.position_tree.current_node.move.coords[0] and \
+                            j == self.position_tree.current_node.move.coords[1] and self.stone_numbers[i][j] is None:
+                        painter.setBrush(QBrush(QColor("red")))
+                        radius_to_use = self.stone_radius * self.b_radius * 0.3
+                        painter.drawEllipse(QPoint(x, y), radius_to_use, radius_to_use)
+                    if self.ownership_choice == "show_with_color" and should_show_percentage(i, j):
+                        rgb = ownership_to_rgb(gt_ownership[i][j])
+                        painter.setBrush(QBrush(QColor(rgb, rgb, rgb, 127)))
+                        painter.setPen(Qt.NoPen)
+                        painter.drawRect(x - int(self.stone_radius // 2), y - int(int(self.stone_radius) // 2),
+                                         int(self.stone_radius), int(self.stone_radius))
+                    elif self.ownership_choice == "show_as_percentages" and should_show_percentage(i, j):
+                        painter.setPen(QColor("white" if arr[i][j] == 'B' else "black"))
+                        percentage = int(50 * (gt_ownership[i][j] + 1))
+                        draw_text(x, y, str(percentage))
+                    elif self.ownership_choice == "don't_show":
+                        pass
 
-                if self.ownership_choice == "show_with_color" and should_show_percentage(i, j):
-                    rgb = ownership_to_rgb(self.a0pos.predicted_ownership[i][j])
-                    painter.setBrush(QBrush(QColor(rgb, rgb, rgb, 127)))
-                    painter.setPen(Qt.NoPen)
-                    painter.drawRect(x - int(self.stone_radius // 2), y - int(int(self.stone_radius) // 2),
-                                     int(self.stone_radius), int(self.stone_radius))
-                elif self.ownership_choice == "show_as_percentages" and should_show_percentage(i, j):
-                    painter.setPen(QColor("white" if self.a0pos.stones[i][j] == BLACK else "black"))
-                    percentage = int(50 * (self.a0pos.predicted_ownership[i][j] + 1))
-                    draw_text(x, y, str(percentage))
-                elif self.ownership_choice == "don't_show":
-                    pass
+                    move_size = int(self.stone_radius / 2)
+                    if self.move_choice == "show_top_b_w":
+                        threshold = 3 * 255  # What should it be? it was written 100
 
-                move_size = int(self.stone_radius / 2)
-                if self.move_choice == "show_top_b_w":
-                    threshold = 3 * 255  # What should it be? it was written 100
+                        black_move_alpha = int(100 * 255 * evaluation.black_moves[i][j] * evaluation.black_prob)
 
-                    black_move_alpha = int(100 * 255 * self.a0pos.predicted_black_next_moves[i][j])
-
-                    if black_move_alpha > threshold and top_black_move[0] == i and top_black_move[1] == j:
-                        painter.setBrush(QBrush(QColor(0, 0, 0, black_move_alpha)))
-                        painter.setPen(QPen(QColor("black")))
-                        painter.drawPolygon(self.get_cross(move_size, x, y))
-
-                    white_move_alpha = int(100 * 255 * self.a0pos.predicted_white_next_moves[i][j])
-
-                    if white_move_alpha > threshold and top_white_move[0] == i and top_white_move[1] == j:
-                        painter.setBrush(QBrush(QColor(255, 255, 255, white_move_alpha)))
-                        painter.setPen(QPen(QColor("white")))
-                        painter.drawEllipse(x - move_size, y - move_size, 2 * move_size, 2 * move_size)
-
-                elif self.move_choice == "black_scores" and should_show_score(i, j):
-                    painter.setPen(QColor("white" if self.a0pos.stones[i][j] == BLACK else "black"))
-                    num = int(100 * self.a0pos.predicted_black_next_moves[i][j])
-                    draw_text(x, y, str(num))
-
-                elif self.move_choice == "white_scores" and should_show_score(i, j):
-                    painter.setPen(QColor("white" if self.a0pos.stones[i][j] == BLACK else "black"))
-                    num = int(100 * self.a0pos.predicted_white_next_moves[i][j])
-                    draw_text(x, y, str(num))
-
-                if self.show_actual_move and self.local_mask is not None:
-                    coords, color, _ = self.a0pos.get_first_local_move(self.local_mask)
-                    color_to_multiply = self.a0pos.stacked_pos[..., -1][0][0]
-                    color = color * (-color_to_multiply) if color_to_multiply != 0 else color
-                    if coords is not None and i == coords[0] and j == coords[1]:
-                        painter.setBrush(Qt.NoBrush)
-                        painter.setPen(QPen(QColor("blue"), 3, Qt.DotLine))
-                        if color == 1:
+                        if black_move_alpha > threshold and top_black_move[0] == i and top_black_move[1] == j:
+                            painter.setBrush(QBrush(QColor(0, 0, 0, black_move_alpha)))
+                            painter.setPen(QPen(QColor("black")))
                             painter.drawPolygon(self.get_cross(move_size, x, y))
-                        else:
+
+                        white_move_alpha = int(100 * 255 * evaluation.white_moves[i][j] * evaluation.white_prob)
+
+                        if white_move_alpha > threshold and top_white_move[0] == i and top_white_move[1] == j:
+                            painter.setBrush(QBrush(QColor(255, 255, 255, white_move_alpha)))
+                            painter.setPen(QPen(QColor("white")))
                             painter.drawEllipse(x - move_size, y - move_size, 2 * move_size, 2 * move_size)
 
-                # if self.show_segmentation:
-                #     color = colors[int(self.a0pos.segmentation[i][j])]
-                #     painter.setBrush(QBrush(color))
-                #     painter.setPen(QPen(color, 0, Qt.SolidLine))
-                #     painter.drawRect(x - int(self.stone_radius), y - int(self.stone_radius),
-                #                      2 * int(self.stone_radius), 2 * int(self.stone_radius))
-                #* self.b_radius if self.a0pos.stones[i][
-                #                      j] == BLACK else self.stone_radius * self.w_radius
-                if self.local_mask is not None:
-                    if not self.local_mask[i][j]:
-                        color = QColor(255, 255, 255, 127)
-                        painter.setBrush(QBrush(color))
-                        painter.setPen(Qt.NoPen)  # QPen(color, 0, Qt.SolidLine))
-                        painter.drawRect(x - int(self.stone_radius), y - int(self.stone_radius),
-                                         2 * int(self.stone_radius), 2 * int(self.stone_radius))
+                    elif self.move_choice == "black_scores" and should_show_score(i, j):
+                        painter.setPen(QColor("white" if arr[i][j] == 'B' else "black"))
+                        num = int(100 * evaluation.black_moves[i][j])
+                        draw_text(x, y, str(num))
+
+                    elif self.move_choice == "white_scores" and should_show_score(i, j):
+                        painter.setPen(QColor("white" if arr[i][j] == 'B' else "black"))
+                        num = int(100 * evaluation.white_moves[i][j])
+                        draw_text(x, y, str(num))
+
+                    # if self.show_actual_move and self.local_mask is not None:
+                    #     coords, color, _ = self.a0pos.get_first_local_move(self.local_mask)
+                    #     color_to_multiply = self.a0pos.stacked_pos[..., -1][0][0]
+                    #     color = color * (-color_to_multiply) if color_to_multiply != 0 else color
+                    #     if coords is not None and i == coords[0] and j == coords[1]:
+                    #         painter.setBrush(Qt.NoBrush)
+                    #         painter.setPen(QPen(QColor("blue"), 3, Qt.DotLine))
+                    #         if color == 1:
+                    #             painter.drawPolygon(self.get_cross(move_size, x, y))
+                    #         else:
+                    #             painter.drawEllipse(x - move_size, y - move_size, 2 * move_size, 2 * move_size)
+
+                    # if self.show_segmentation:
+                    #     color = colors[int(self.a0pos.segmentation[i][j])]
+                    #     painter.setBrush(QBrush(color))
+                    #     painter.setPen(QPen(color, 0, Qt.SolidLine))
+                    #     painter.drawRect(x - int(self.stone_radius), y - int(self.stone_radius),
+                    #                      2 * int(self.stone_radius), 2 * int(self.stone_radius))
+                    #* self.b_radius if self.a0pos.stones[i][
+                    #                      j] == BLACK else self.stone_radius * self.w_radius
+                # if self.position_tree.mask is not None:
+                if not mask[i][j]:
+                    color = QColor(255, 255, 255, 127)
+                    painter.setBrush(QBrush(color))
+                    painter.setPen(Qt.NoPen)  # QPen(color, 0, Qt.SolidLine))
+                    painter.drawRect(x - int(self.stone_radius), y - int(self.stone_radius),
+                                     2 * int(self.stone_radius), 2 * int(self.stone_radius))
         # Draw GameTree widget on the right side of the board
         painter.end()
         if not self.paint_event_done:
@@ -321,7 +336,7 @@ class GoBoard(QWidget):
         prop = "A" + color
         if 0 <= row < self.size_x and 0 <= col < self.size_y:
             added_stone = Move((row, col)).sgf([19, 19])
-            if not self.a0pos.stones[row][col]:
+            if not self.position_tree.arr[row][col]:
                 # Place a stone at the clicked position
                 try:
                     self.position_tree.current_node.add_list_property(prop, [added_stone])
@@ -330,7 +345,7 @@ class GoBoard(QWidget):
             else:
                 self.remove_stone(added_stone)
             self.position_tree._calculate_groups()
-            self.position_tree.update_a0pos_state()
+            # self.position_tree.update_a0pos_state()
             self.update()
 
             self.position_tree.reset_tree()
@@ -339,11 +354,11 @@ class GoBoard(QWidget):
         pos = event.pos()
         row, col = self.pixel_to_board(pos.x(), pos.y())
         if 0 <= row < self.size_x and 0 <= col < self.size_y:
-            self.local_mask[row][col] = 1 - self.local_mask[row][col]
+            self.position_tree.mask[row][col] = 1 - self.position_tree.mask[row][col]
             self.update()
 
     def add_moves(self, event):
-        print(self.a0pos.stones)
+        # print(self.a0pos.stones)
         color = self.last_color if event.button() == Qt.RightButton else - self.last_color
         self.last_color = color
         color = "B" if color == 1 else "W"
@@ -360,19 +375,20 @@ class GoBoard(QWidget):
         self.default_event_handler(event)
 
     def handle_default_event(self, event):
-        pos = event.pos()
-        row, col = self.pixel_to_board(pos.x(), pos.y())
-        if 0 <= row < self.size_x and 0 <= col < self.size_y:
-            try:
-                if event.button() == Qt.RightButton:
-                    self.local_mask = None
-                    self.a0pos.reset_predictions()
-                else:
-                    self.local_mask = self.a0pos.get_local_pos_mask((row, col))
-                    self.a0pos.analyze_pos(self.local_mask)
-                self.update()
-            except:
-                pass
+        self.update()
+        # pos = event.pos()
+        # row, col = self.pixel_to_board(pos.x(), pos.y())
+        # if 0 <= row < self.size_x and 0 <= col < self.size_y:
+        #     try:
+        #         if event.button() == Qt.RightButton:
+        #             self.local_mask = None
+        #             self.a0pos.reset_predictions()
+        #         else:
+        #             self.local_mask = self.a0pos.get_local_pos_mask((row, col))
+        #             self.a0pos.analyze_pos(self.local_mask)
+        #         self.update()
+        #     except:
+        #         pass
 
     def undo_move(self):
         # TODO: Currently, it's not working well
@@ -386,8 +402,8 @@ class GoBoard(QWidget):
     def clear_board(self):
         self.reset_numbers()
         del self.position_tree
-        self.position_tree = PositionTree.from_a0pos(AnalyzedPosition(), parent_widget=self)
-        self.position_tree.load_agent(self.agent)
+        self.position_tree = PyQtPositionTree(LocalPositionNode(), config=self.config, parent_widget=self)
+        # self.position_tree.load_agent(self.agent)
         # self.position_tree.goban = self
         self.update()
 
@@ -400,19 +416,26 @@ class GoBoard(QWidget):
         self.stone_numbers = np.array([[None for y in range(self.size_y)] for x in range(self.size_x)])
         self.last_number = 0
 
-    @property
-    def a0pos(self):
-        return self.position_tree.current_node.a0pos
+    # @property
+    # def a0pos(self):
+    #     return self.position_tree.current_node.a0pos
 
     def visualize_position(self, gtp_position):
-        a0pos = AnalyzedPosition.from_gtp_log(gtp_position) if not self.from_pkl else AnalyzedPosition.from_jax(gtp_position)
-        self.position_tree = PositionTree.from_a0pos(a0pos, parent_widget=self)
+        # a0pos = AnalyzedPosition.from_gtp_log(gtp_position) if not self.from_pkl else AnalyzedPosition.from_jax(gtp_position)
+        # self.position_tree = PositionTree.from_a0pos(a0pos, parent_widget=self)
+        print(gtp_position)
+        assert gtp_position.endswith('.sgf'), 'Parsing of non sgf positions hasn\'t been implemented yet'
+        root_node: LocalPositionNode = LocalPositionSGF.parse_file(gtp_position)
+        self.position_tree = PyQtPositionTree(root_node, config=self.config, parent_widget=self, game_name=os.path.basename(gtp_position))
         # self.position_tree.goban = self
         # self.position_tree.update_a0pos_state()
-        self.local_mask = self.a0pos.local_mask if self.a0pos.fixed_mask else None
-        self.position_tree.load_agent(self.agent)
-        self.a0pos.analyze_pos(self.local_mask, self.agent)
-        self.size_x, self.size_y = self.a0pos.size_x, self.a0pos.size_y
+
+        # self.local_mask = self.a0pos.local_mask if self.a0pos.fixed_mask else None
+        # self.position_tree.load_agent(self.agent)
+        # self.a0pos.analyze_pos(self.local_mask, self.agent)
+        self.size_x, self.size_y = self.position_tree.board_size
+        self.arr = self.position_tree.arr
+        self.mask = self.position_tree.mask
         self.reset_numbers()
         self.update()
 
@@ -437,9 +460,8 @@ class CurrentNodeKeeper:
 
 
 class GameTree(QGraphicsView):
-    def __init__(self, parent: GoBoard = None, position_tree=None, **kwargs):
+    def __init__(self, parent: GoBoard = None, **kwargs):
         super().__init__(parent, **kwargs)
-        self.position_tree = position_tree
 
         # self.setMouseTracking(True)
         self.setAlignment(Qt.AlignTop | Qt.AlignLeft)
@@ -457,21 +479,20 @@ class GameTree(QGraphicsView):
         self.main_layout = l
         self.node_dict = {}
         self.current_node_keeper = CurrentNodeKeeper(None)
+        self.position_tree = None
 
-    def create_tree(self):
-
-        def draw_node(node, parnt=None, corner=True, anchor1=None, anchor2=None, hor_spac=0.0, node_radius=40.0):
-
+    def create_tree(self, position_tree):
+        self.position_tree = position_tree
+        def draw_node(node, parnt=None, corner=True, anchor1=None, anchor2=None, hor_spac=0.0, node_radius=40.0, sibling_node=None, spac_from_parnt=None):
             if node not in self.node_dict:
-                node_widget = NodeWidget(parent=self.main_widget, position_tree=self.position_tree, node=node, size=QSizeF(node_radius, node_radius), current_node=self.current_node_keeper)
+                node_widget = NodeWidget(parent=self.main_widget, position_tree=position_tree, node=node, size=QSizeF(node_radius, node_radius), current_node=self.current_node_keeper)
                 self.node_dict[node] = node_widget
+                draw_line = parnt is not None
 
                 if parnt is None:
-                    draw_line = False
                     parnt = self.main_layout
                     second_anchor = Qt.AnchorTop
                 else:
-                    draw_line = True
                     second_anchor = Qt.AnchorBottom
                 self.main_layout.addAnchor(
                     node_widget,
@@ -480,14 +501,24 @@ class GameTree(QGraphicsView):
                     second_anchor,
                 )
 
-                if corner:
+                if sibling_node is not None:
+                    assert spac_from_parnt is None
+                    anch = self.main_layout.addAnchor(
+                        node_widget,
+                        anchor2,
+                        sibling_node,
+                        anchor1,
+                    )
+                    anch.setSpacing(hor_spac - node_radius)
+                elif corner:
+                    assert spac_from_parnt is not None
                     anch = self.main_layout.addAnchor(
                         node_widget,
                         anchor1,
                         parnt,
                         anchor2,
                     )
-                    anch.setSpacing(hor_spac)
+                    anch.setSpacing(spac_from_parnt)
                 else:
                     self.main_layout.addAnchor(
                         node_widget,
@@ -504,30 +535,40 @@ class GameTree(QGraphicsView):
 
             if node.children:
                 if len(node.children) == 1:
+                    # In the current version of the program we always have at least 2 children (at least 1 per color)
                     draw_node(node.children[0], node_widget, corner=False, anchor1=Qt.AnchorTop, anchor2=Qt.AnchorBottom, hor_spac=hor_spac, node_radius=node_radius)
-                elif len(node.children) == 2:
-                    new_hor_spac = (hor_spac - node_radius) / 2
-                    draw_node(node.children[0], node_widget, corner=True, anchor1=Qt.AnchorLeft, anchor2=Qt.AnchorRight, hor_spac=new_hor_spac, node_radius=node_radius)
-                    draw_node(node.children[1], node_widget, corner=True, anchor1=Qt.AnchorRight, anchor2=Qt.AnchorLeft, hor_spac=new_hor_spac, node_radius=node_radius)
+                else:
+                    new_hor_spac = hor_spac / len(node.children)
+                    new_node_radius = node_radius * .8
+                    children_sorted = [c for c in node.children if c.player == "B"] + [c for c in node.children if c.player == "W"]
+                    sibling_node = None
+                    for child in children_sorted:
+                        if sibling_node is None:
+                            spac_from_parnt = (hor_spac - new_hor_spac - node_radius - new_node_radius) / 2
+                        else:
+                            spac_from_parnt = None
+                        draw_node(child, node_widget, corner=True, anchor1=Qt.AnchorLeft, anchor2=Qt.AnchorRight, hor_spac=new_hor_spac, node_radius=new_node_radius, sibling_node=sibling_node, spac_from_parnt=spac_from_parnt)
+                        sibling_node = self.node_dict[child]
 
         node_radius = self.main_widget.geometry().width() / 15
 
         self.main_layout.setVerticalSpacing(self.main_widget.geometry().height() / 9 - node_radius)
-        self.current_node_keeper.current_node = self.position_tree.root
-
+        self.current_node_keeper.current_node = position_tree.root
+        print("About to draw the node")
         draw_node(
-            self.position_tree.root,
+            position_tree.root,
             parnt=None,
             corner=False,
             anchor1=Qt.AnchorTop,
             anchor2=Qt.AnchorTop,
-            hor_spac=.5 * self.main_widget.geometry().width() - 2 * node_radius,
+            hor_spac=self.main_widget.geometry().width(),  # * .5 - 2 * node_radius,
             node_radius=node_radius,
         )
 
     def clear_tree(self):
-        self.position_tree.go_to_node(self.position_tree.root)
-        self.position_tree.reset_tree()
+        if self.position_tree is not None:
+            self.position_tree.go_to_node(self.position_tree.root)
+            self.position_tree.reset_tree()
         # Delete all created NodeWidgets and AnchorLines from the scene
         for node in self.node_dict:
             if node.parent is not None:
@@ -535,7 +576,7 @@ class GameTree(QGraphicsView):
         for item in self.main_scene.items():
             if isinstance(item, AnchorLine):
                 self.main_scene.removeItem(item)
-        self.create_tree()
+        # self.create_tree()
 
     def update_widget(self):
         vp = self.viewport().mapFromParent(QtCore.QPoint())
@@ -603,7 +644,7 @@ class AnchorLine(QGraphicsItem):
 
 
 class NodeWidget(QGraphicsWidget):
-    def __init__(self, parent=None, position_tree: PositionTree = None, node: LocalPositionNode = None, size=QSizeF(20, 20), current_node=None):
+    def __init__(self, parent=None, position_tree: PyQtPositionTree = None, node: LocalPositionNode = None, size=QSizeF(20, 20), current_node=None):
         super().__init__(parent)
         self.setAcceptHoverEvents(True)
         self.node = node
@@ -666,8 +707,8 @@ class MainWindow(QMainWindow):
         margin_size = intersection_size * MARGIN_SIZE / INTERSECTION_SIZE
 
         # create the widgets
-        self.go_board = GoBoard(self, size=int(BOARD_SIZE), stone_radius=int(intersection_size), margin=int(margin_size))
-        self.game_tree = GameTree(self.go_board, self.go_board.position_tree)
+        self.go_board = GoBoard(parent=self, size=int(BOARD_SIZE), stone_radius=int(intersection_size), margin=int(margin_size))
+        self.game_tree = GameTree(self.go_board)
         self.game_tree.setStyleSheet("QWidget { background-color: #B19886; }")
 
         self.move_buttons = QButtonGroup()
@@ -925,9 +966,9 @@ class MainWindow(QMainWindow):
             self.set_up_frame.hide()
             # self.depth_slider.hide()
             self.go_board.position_tree.max_depth = self.depth_spinbox.value()
-            self.go_board.position_tree.update_a0pos_state()
-            self.go_board.a0pos.local_mask = self.go_board.local_mask
-            self.go_board.a0pos.analyze_pos(self.go_board.local_mask, self.go_board.agent)
+            # self.go_board.position_tree.update_a0pos_state()
+            # self.go_board.a0pos.local_mask = self.go_board.local_mask
+            # self.go_board.a0pos.analyze_pos(self.go_board.local_mask, self.go_board.agent)
             self.update_buttons()
             self.go_board.update()
             self.calculate_score()
@@ -946,31 +987,32 @@ class MainWindow(QMainWindow):
 
     def add_mask(self):
         if self.add_mask_button.isChecked():
-            if np.min(self.go_board.local_mask) > 0:
-                self.go_board.local_mask = [[0 for y in range(self.go_board.a0pos.pad_size)]
-                              for x in range(self.go_board.a0pos.pad_size)]
+            if np.min(self.go_board.position_tree.mask) > 0:
+                self.go_board.position_tree.mask = [[0 for y in range(19)]
+                              for x in range(19)]
             self.go_board.update()
             self.go_board.default_event_handler = self.go_board.add_mask
 
     def detect_mask(self):
-        if self.detect_mask_button.isChecked():
-            self.go_board.local_mask = [[1 for y in range(self.go_board.a0pos.pad_size)]
-                          for x in range(self.go_board.a0pos.pad_size)]
-            self.go_board.a0pos.board_mask = [[1 for y in range(self.go_board.a0pos.pad_size)]
-                          for x in range(self.go_board.a0pos.pad_size)]
-            self.go_board.a0pos.analyze_and_decompose(self.go_board.local_mask, self.go_board.agent)
-            print(self.go_board.a0pos.segmentation)
-            biggest_segment = None
-            biggest_segment_size = 0
-            for i in range(1, np.max(self.go_board.a0pos.segmentation)):
-                segment = self.go_board.a0pos.segmentation == i
-                segment_size = np.sum(segment)
-                if biggest_segment_size < segment_size and segment_size < 20:
-                    biggest_segment_size = segment_size
-                    biggest_segment = segment
-            self.go_board.local_mask = biggest_segment
-            self.go_board.update()
-            self.go_board.default_event_handler = self.go_board.add_mask
+        raise NotImplementedError
+        # if self.detect_mask_button.isChecked():
+        #     self.go_board.local_mask = [[1 for y in range(19)]
+        #                   for x in range(19)]
+        #     self.go_board.a0pos.board_mask = [[1 for y in range(19)]
+        #                   for x in range(19)]
+        #     self.go_board.a0pos.analyze_and_decompose(self.go_board.local_mask, self.go_board.agent)
+        #     print(self.go_board.a0pos.segmentation)
+        #     biggest_segment = None
+        #     biggest_segment_size = 0
+        #     for i in range(1, np.max(self.go_board.a0pos.segmentation)):
+        #         segment = self.go_board.a0pos.segmentation == i
+        #         segment_size = np.sum(segment)
+        #         if biggest_segment_size < segment_size and segment_size < 20:
+        #             biggest_segment_size = segment_size
+        #             biggest_segment = segment
+        #     self.go_board.local_mask = biggest_segment
+        #     self.go_board.update()
+        #     self.go_board.default_event_handler = self.go_board.add_mask
 
     def undo_move(self):
         self.go_board.undo_move()
@@ -989,9 +1031,12 @@ class MainWindow(QMainWindow):
         self.thread.start()
 
     def update_tree(self):
+        print("Updated")
+        self.go_board.built_tree = True
         self.go_board.update()
-        self.game_tree.create_tree()
+        self.game_tree.create_tree(self.go_board.position_tree)
         self.update_buttons()
+        print("Done!!!")
 
     def select_directory(self):
         settings = QSettings("GoBoard", "Settings")
@@ -1018,15 +1063,16 @@ class MainWindow(QMainWindow):
                     self.go_board.from_pkl = True
                     self.visualize_position()
             elif self.selected_sgf.endswith(".sgf"):
-                with open(self.selected_sgf, 'r') as f:
-                    self.positions = [f.read()]
-                    self.visualize_position()
+                self.positions = [self.selected_sgf]
+                # with open(self.selected_sgf, 'r') as f:
+                #     self.positions = [f.read()]
+                self.visualize_position()
             elif os.path.isdir(self.selected_sgf):
                 self.positions = []
                 for file in os.listdir(self.selected_sgf):
                     if file.endswith(".sgf"):
-                        with open(os.path.join(self.selected_sgf, file), 'r') as f:
-                            self.positions.append(f.read())
+                        # with open(os.path.join(self.selected_sgf, file), 'r') as f:
+                        #     self.positions.append(f.read())
                         self.positions.append(os.path.join(self.selected_sgf, file))
                 self.visualize_position()
 
@@ -1034,30 +1080,40 @@ class MainWindow(QMainWindow):
             # self.update_pinned_directories(selected_directory)
 
     def update_buttons(self):
-        diff = self.go_board.position_tree.current_node.temperature
-        black_move_prob = self.go_board.a0pos.black_move_prob
-        white_move_prob = self.go_board.a0pos.white_move_prob
-        no_move_prob = self.go_board.a0pos.no_move_prob
-        next_pl = self.go_board.position_tree.current_node.next_move_player
-        if next_pl == NextMovePlayer.both:
-            self.label.setText(f'Temperature: {diff:.2f} points\n'
-                               f'Local score: {self.go_board.position_tree.current_node.calculated_score:.2f}')
-        elif next_pl == NextMovePlayer.none:
-            self.label.setText(f'Finished position\n'
-                               f'Local score: {self.go_board.position_tree.current_node.calculated_score:.2f}')
-        elif next_pl == NextMovePlayer.black or next_pl == NextMovePlayer.white:
-            self.label.setText(f'Sente - {next_pl.name} plays next\n'
-                               f'Local score: {self.go_board.position_tree.current_node.calculated_score:.2f}')
-        else:
-            self.label.setText(f'Set up position and analyze')
+        if not self.go_board.built_tree:
+            print("Tree not built!")
+            return
+        cgt_game = self.go_board.position_tree.current_node.cgt_game
+        print("Tree built!", cgt_game, self.go_board.position_tree.current_node == self.go_board.position_tree.root)
+        try:
+            self.label.setText(f'Temperature: {float(cgt_game.temp):.2f} points\n'
+                               f'Local score: {float(cgt_game.mean):.2f}')
+        except:
+            self.label.setText(f'CGT calculations failed')
+        evaluation = self.go_board.position_tree.eval_for_node()
+        black_move_prob = evaluation.black_prob * (1 - evaluation.no_move_prob)
+        white_move_prob = evaluation.white_prob * (1 - evaluation.no_move_prob)
+        no_move_prob = evaluation.no_move_prob
+
+        # black_move_prob = self.go_board.a0pos.black_move_prob
+        # white_move_prob = self.go_board.a0pos.white_move_prob
+        # no_move_prob = self.go_board.a0pos.no_move_prob
+        # elif next_pl == NextMovePlayer.none:
+        #     self.label.setText(f'Finished position\n'
+        #                        f'Local score: {mean:.2f}')
+        # elif next_pl == NextMovePlayer.black or next_pl == NextMovePlayer.white:
+        #     self.label.setText(f'Sente - {next_pl.name} plays next\n'
+        #                        f'Local score: {mean:.2f}')
+        # else:
+        #     self.label.setText(f'Set up position and analyze')
         self.black_prob_label.setText(f"Black move prob: {round(100 * black_move_prob)}%")
         self.white_prob_label.setText(f"White move prob: {round(100 * white_move_prob)}%")
         self.no_move_prob_label.setText(f"No move prob: {round(100 * no_move_prob)}%")
 
     def visualize_position(self):
         current_position = self.positions[self.current_position_index]
-        if not self.go_board.from_pkl:
-            current_position = json.loads(current_position)
+        # if not self.go_board.from_pkl:
+        #     current_position = json.loads(current_position)
 
         self.go_board.visualize_position(current_position)
         self.update_buttons()
@@ -1080,6 +1136,7 @@ if __name__ == "__main__":
         # or QtWidgets.QApplication.exit(0)
 
     sys.excepthook = excepthook
+    # with logging_context_manager():
     window = MainWindow()
     window.show()
     app.exec_()

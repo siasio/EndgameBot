@@ -58,10 +58,10 @@ class KatagoEvaluator(AbstractEvaluator):
             # if evaluation in self.eval_queue:
             #     return
             # self.eval_queue.append(evaluation)
-            node_w = copy.deepcopy(evaluation.position)
-            node_w._player = 'W'
             node_b = copy.deepcopy(evaluation.position)
             node_b._player = 'B'
+            node_w = copy.deepcopy(evaluation.position)
+            node_w._player = 'W'
             ev_key = self.get_key(evaluation.position, evaluation.mask)
             self.nodes_dict[ev_key] = {
                 'W': node_w,
@@ -74,13 +74,13 @@ class KatagoEvaluator(AbstractEvaluator):
             not_done_evaluations = [ev for ev in evaluation if ev not in self.eval_queue]
             # self.eval_queue.extend(not_done_evaluations)
 
-            nodes_w = [copy.deepcopy(ev.position) for ev in not_done_evaluations]
-            for node in nodes_w:
-                node._player = 'W'
-
             nodes_b = [copy.deepcopy(ev.position) for ev in not_done_evaluations]
             for node in nodes_b:
                 node._player = 'B'
+
+            nodes_w = [copy.deepcopy(ev.position) for ev in not_done_evaluations]
+            for node in nodes_w:
+                node._player = 'W'
 
             for ev, node_w, node_b in zip(not_done_evaluations, nodes_w, nodes_b):
                 ev_key = self.get_key(ev.position, ev.mask)
@@ -137,22 +137,12 @@ class KatagoEvaluator(AbstractEvaluator):
         super().shutdown()
 
 
-def get_position(node: GameNode):
-    arr = np.zeros(node.board_size)
-    for s in node.stones:
-        if s.player == "W":
-            arr[s.coords[0]][s.coords[1]] = - 1
-        else:
-            arr[s.coords[0]][s.coords[1]] = 1
-    return arr
-
-
 def stack_pos(node: GameNode):
     x, y = node.board_size
     previous_positions = []
     current_player = None
     while True:
-        previous_positions.append(get_position(node))
+        previous_positions.append(node.stones)
         if len(previous_positions) >= 8 or node.parent is None or node.player == current_player:
             break
         current_player = node.player
