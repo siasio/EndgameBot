@@ -4,3 +4,6 @@
 [submodule "a0jax"]
 	path = a0-jax
 	url = https://github.com/siasio/a0-jax.git
+[submodule "Sgfs_to_pdf"]
+	path = Sgfs_to_pdf
+	url = https://github.com/siasio/Sgfs_to_pdf

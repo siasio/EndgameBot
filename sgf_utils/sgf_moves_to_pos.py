@@ -1,6 +1,8 @@
 import os
 from typing import Optional, Tuple, List
 
+from scipy.signal.windows import blackman
+
 from sgf_utils.game import BaseGame, KaTrainSGF
 from sgf_utils.game_node import GameNode
 from sgf_utils.sgf_parser import SGFNode
@@ -12,20 +14,37 @@ from sgf_utils.sgf_parser import SGFNode
 # parser.add_argument('--directory', '-d', type=str)
 # directory = parser.parse_args().directory
 
+def get_stones_from_game(game: BaseGame, node=None, copy_children=True):
+    stones = game.stones
+    white_sgf_stones = [s.sgf(game.board_size) for s in stones if s.player == 'W']
+    black_sgf_stones = [s.sgf(game.board_size) for s in stones if s.player == 'B']
+    position_node = GameNode(
+        properties={'AW': white_sgf_stones, 'AB': black_sgf_stones})  # , 'SZ': ':'.join(map(str, game.board_size))})
+    if copy_children:
+        assert node is not None, "Node must be provided to copy children"
+        position_node.children = node.children
+    return position_node
+
+
+def copy_root_pos(game: BaseGame):
+    stones = game.stones
+    white_sgf_stones = [s.sgf(game.board_size) for s in stones if s.player == 'W']
+    black_sgf_stones = [s.sgf(game.board_size) for s in stones if s.player == 'B']
+    position_node = GameNode(properties={'AW': white_sgf_stones, 'AB': black_sgf_stones})
+    return position_node
+
+
+def get_stones_from_node(node):
+    try:
+        game = BaseGame(node)
+    except Exception as e:
+        print(sgf_string)
+        raise e
+    position_node = get_stones_from_game(game, node)
+    return position_node
+
 
 def get_stones_on_board(sgf_string, folder, file, all_to_pos=False, seek_comments=True, seek_second_comment=True, add_players_info_in_comments=False):
-    def get_stones_from_node(node):
-        try:
-            game = BaseGame(node)
-        except Exception as e:
-            print(sgf_string)
-            raise e
-        stones = game.stones
-        white_sgf_stones = [s.sgf(game.board_size) for s in stones if s.player == 'W']
-        black_sgf_stones = [s.sgf(game.board_size) for s in stones if s.player == 'B']
-        position_node = GameNode(properties={'AW': white_sgf_stones, 'AB': black_sgf_stones}) #, 'SZ': ':'.join(map(str, game.board_size))})
-        position_node.children = node.children
-        return position_node
 
     root = KaTrainSGF(sgf_string).root
     if seek_comments or all_to_pos:
@@ -78,43 +97,43 @@ def get_stones_on_board(sgf_string, folder, file, all_to_pos=False, seek_comment
 # stones = get_stones_on_board(sgf_string)
 # print(stones)
 
+if __name__ == '__main__':
+    root_path = input("What directory to merge?\n")
+    if root_path.startswith('"'):
+        root_path = root_path[1:]
+    if root_path.endswith('"'):
+        root_path = root_path[:-1]
+    root_node = GameNode(properties={'SZ': 19})
+    root_node.children.append(GameNode(properties={'N': ''}))
+    seek_comments, seek_second_comment = False, False
+    all_to_pos = input("Encode all moves as a position? (y/n)\n").lower() == 'y'
+    if not all_to_pos:
+        seek_comments = input("Encode moves until the first comment as a position? (y/n)\n").lower() == 'y'
+        if seek_comments:
+            seek_second_comment = input("Encode moves until the second comment as numbered stones? (y/n)\n").lower() == 'y'
+    add_players_info_in_comments = input("Add players info in comments? (y/n)\n").lower() == 'y'
+    merge_games = input("Merge games? (y/n)\n").lower() == 'y'
+    try:
+        for file in os.listdir(root_path):
+            if not file.endswith('.sgf'):
+                continue
+            filepath = os.path.join(root_path, file)
+            with open(filepath, 'r', errors='ignore') as f:
+                sgf_string = f.read()
+            new_node = get_stones_on_board(sgf_string, root_path, file, all_to_pos=all_to_pos, seek_comments=seek_comments, seek_second_comment=seek_second_comment, add_players_info_in_comments=add_players_info_in_comments)
+            if not merge_games:
+                new_game = BaseGame(new_node)
+                new_game.write_sgf(os.path.join(root_path, file.rsplit('.', 1)[0] + '_pos.sgf'))
+                continue
+            root_node.children.append(new_node)
+            print(f'Added {file}!')
 
-root_path = input("What directory to merge?\n")
-if root_path.startswith('"'):
-    root_path = root_path[1:]
-if root_path.endswith('"'):
-    root_path = root_path[:-1]
-root_node = GameNode(properties={'SZ': 19})
-root_node.children.append(GameNode(properties={'N': ''}))
-seek_comments, seek_second_comment = False, False
-all_to_pos = input("Encode all moves as a position? (y/n)\n").lower() == 'y'
-if not all_to_pos:
-    seek_comments = input("Encode moves until the first comment as a position? (y/n)\n").lower() == 'y'
-    if seek_comments:
-        seek_second_comment = input("Encode moves until the second comment as numbered stones? (y/n)\n").lower() == 'y'
-add_players_info_in_comments = input("Add players info in comments? (y/n)\n").lower() == 'y'
-merge_games = input("Merge games? (y/n)\n").lower() == 'y'
-try:
-    for file in os.listdir(root_path):
-        if not file.endswith('.sgf'):
-            continue
-        filepath = os.path.join(root_path, file)
-        with open(filepath, 'r', errors='ignore') as f:
-            sgf_string = f.read()
-        new_node = get_stones_on_board(sgf_string, root_path, file, all_to_pos=all_to_pos, seek_comments=seek_comments, seek_second_comment=seek_second_comment, add_players_info_in_comments=add_players_info_in_comments)
-        if not merge_games:
-            new_game = BaseGame(new_node)
-            new_game.write_sgf(os.path.join(root_path, file.rsplit('.', 1)[0] + '_pos.sgf'))
-            continue
-        root_node.children.append(new_node)
-        print(f'Added {file}!')
-
-    if merge_games:
-        merged_game = BaseGame(root_node)
-        merged_game.write_sgf(os.path.join(root_path, 'merged.sgf'))
-        input("Merged game written to merged.sgf. Press enter to exit.")
-    else:
-        input("Games written. Press enter to exit.")
-except Exception as e:
-    print(e)
-    input("Program has failed. Press enter to exit.")
+        if merge_games:
+            merged_game = BaseGame(root_node)
+            merged_game.write_sgf(os.path.join(root_path, 'merged.sgf'))
+            input("Merged game written to merged.sgf. Press enter to exit.")
+        else:
+            input("Games written. Press enter to exit.")
+    except Exception as e:
+        print(e)
+        input("Program has failed. Press enter to exit.")
