@@ -30,7 +30,7 @@ def copy_root_pos(game: BaseGame):
     stones = game.stones
     white_sgf_stones = [s.sgf(game.board_size) for s in stones if s.player == 'W']
     black_sgf_stones = [s.sgf(game.board_size) for s in stones if s.player == 'B']
-    position_node = GameNode(properties={'AW': white_sgf_stones, 'AB': black_sgf_stones})
+    position_node = BaseGame(GameNode(properties={'AW': white_sgf_stones, 'AB': black_sgf_stones}))
     return position_node
 
 

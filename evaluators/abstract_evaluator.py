@@ -1,4 +1,5 @@
 import copy
+import json
 from typing import List, Union
 
 import numpy as np
@@ -55,6 +56,10 @@ class AbstractEvaluator:
     def shutdown(self):
         del self
 
+    def reset(self):
+        self.eval_queue = []
+        self.inference_count = 0
+
 
 class Evaluation:
     def __init__(self, evaluator: AbstractEvaluator, position: GameNode, mask: np.ndarray):
@@ -88,6 +93,17 @@ class Evaluation:
     def __deepcopy__(self, memodict={}):
         new_obj = type(self)(self.evaluator, self.position, self.mask)
         return new_obj
+
+    def to_json(self):
+        return json.dumps({
+            'black_moves': self._black_moves.tolist(),
+            'white_moves': self._white_moves.tolist(),
+            'black_prob': self._black_prob,
+            'no_move_prob': self._no_move_prob,
+            'ownership': self._ownership.tolist(),
+            'score': self._score,
+            'predicted_mask': self._predicted_mask.tolist(),
+        })
 
     @property
     def moves(self):

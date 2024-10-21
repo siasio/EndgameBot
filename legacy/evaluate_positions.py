@@ -12,6 +12,7 @@ import numpy as np
 import yaml
 from cloudpickle import cloudpickle
 
+from common.utils import lowest_number_for_dir
 from legacy.build_tree import PositionTree
 from game_tree.local_position_node import LocalPositionSGF, LocalPositionNode
 # from katago_wrapper import KatagoWrapper
@@ -64,14 +65,6 @@ def add_mask_to_node(node: SGFNode, array):
             value = array[i, j]
             if value == 0:
                 node.add_list_property("TR", [Move(coords=(i, j)).sgf(node.board_size)])
-
-
-def lowest_number_for_dir(dir):
-    if not os.path.exists(dir):
-        return 0
-    basenames = [f.split(".")[0] for f in os.listdir(dir)]
-    numbers = [int(b) for b in basenames if b.isnumeric()]
-    return max(numbers) + 1 if numbers else 0
 
 
 def time_now():

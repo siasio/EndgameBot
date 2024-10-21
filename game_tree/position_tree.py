@@ -13,11 +13,17 @@ from evaluators.evaluation_registry import EvaluationRegistry
 from sgf_utils.sgf_parser import Move
 
 
+class TreeBuildingException(Exception):
+    def __init__(self, message):
+        self.message = message
+
+
+
 class PositionTree(BaseGame[LocalPositionNode]):
 
-    def __init__(self, position_node: LocalPositionNode, config, game_name=None):
+    def __init__(self, position_node: LocalPositionNode, config, game_name=None, **initialized_evaluators):
         super().__init__(position_node)
-        self.eval = EvaluationRegistry()
+        self.eval = EvaluationRegistry(**initialized_evaluators)
         self.config = config
         self.evaluator_name = config['evaluator']
         self.game_name = game_name
@@ -172,9 +178,12 @@ class PositionTree(BaseGame[LocalPositionNode]):
             if self.current_node.parent is None:
                 break
             self.undo()
-            self.current_node.set_cgt_game()
+            try:
+                self.current_node.set_cgt_game()
+            except:
+                pass
 
-    def build_tree(self, max_depth=None, delete_engine=True):
+    def build_tree(self, max_depth=None, delete_engine=True, reset_engine=False):
         current_depth = 0
         iterations_on_this_depth = 0
         iter_num = 0
@@ -186,12 +195,16 @@ class PositionTree(BaseGame[LocalPositionNode]):
                     iterations_on_this_depth += 1
                     self.select_node()
                     evaluation: Evaluation = self.eval_for_node(self.current_node)
-                    if max_depth is not None and current_depth >= max_depth:
-                        pass
-                        # print(f"Reached max tree depth ({current_depth})")
-                    else:
-                        self.expand_node(evaluation)
-                    self.backup(evaluation)
+                    try:
+                        if max_depth is not None and current_depth >= max_depth:
+                            pass
+                            raise TreeBuildingException(f"Max depth exceeded")
+                            # print(f"Reached max tree depth ({current_depth})")
+                        else:
+                            self.expand_node(evaluation)
+                        self.backup(evaluation)
+                    except Exception as e:
+                        raise TreeBuildingException(f"Error while expanding node {self.current_node.move} at depth {current_depth}") from e
                     assert self.current_node == self.root, "Current node is not root after backup"
                     if self.current_node.expanded_tree_depth > current_depth:
                         current_depth = self.current_node.expanded_tree_depth
@@ -204,10 +217,17 @@ class PositionTree(BaseGame[LocalPositionNode]):
             self.inference_num = self.eval.get_evaluator(self.evaluator_name, **self.config['evaluator_kwargs']).inference_count
         finally:
             if delete_engine:
+                print("Shutting down engines")
                 keys = list(self.eval.evaluator_registry.keys())
                 for key in keys:
                     engine = self.eval.evaluator_registry.pop(key)
                     engine.shutdown()
+            elif reset_engine:
+                print("Resetting engines")
+                keys = list(self.eval.evaluator_registry.keys())
+                for key in keys:
+                    engine = self.eval.evaluator_registry[key]
+                    engine.reset()
             self.built_tree = True
 
     def reset_tree(self):
@@ -259,17 +279,23 @@ class PositionTree(BaseGame[LocalPositionNode]):
 
 class PyQtPositionTree(PositionTree, QThread):
     update_signal = pyqtSignal()
+    error_signal = pyqtSignal(str)
 
-    def __init__(self, position_node: LocalPositionNode, config, parent_widget, game_name=None):
+    def __init__(self, position_node: LocalPositionNode, config, parent_widget, game_name=None, **initialized_evaluators):
         position_node.game = self
-        PositionTree.__init__(self, position_node, config, game_name=game_name)
+        PositionTree.__init__(self, position_node, config, game_name=game_name, **initialized_evaluators)
         QObject.__init__(self, parent_widget)
         self.parent_widget = parent_widget
         # self.max_depth = max_depth
 
     def run(self):
         """Override run method of QThread to run calculations in the PyQt app"""
-        self.build_tree(delete_engine=False)
+        try:
+            self.build_tree(delete_engine=False, reset_engine=True)
+        except Exception as e:
+            # Signalize the error to the parent widget
+            self.error_signal.emit(traceback.format_exc())
+
         self.update_signal.emit()
         self.parent_widget.wait_for_paint_event()
 

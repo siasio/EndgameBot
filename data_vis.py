@@ -13,17 +13,21 @@ def prepare_layout(num_sgfs_per_page):
 
 
 def visualize(sgfs, pdf_path, num_sgfs_per_page=15, board_color=color.rgb(224/255, 184/255, 135/255)):
+    rgb = board_color
+    board_gray = color.rgb(0.9 * board_color.r, 0.9 * board_color.g, 0.9 * board_color.b)
     canvases = [graphic_grayed_position(
         sgf_to_position(
             sgf,
             swap=False,
             white_marking=Marking.square,
             smart_coords=True,
-            solution=False,
+            solution=True,
             square=True,
-            MIN_SKIP=1
+            MIN_SKIP=1,
+            rotate=False,
         ),
-        board_color=board_color
+        board_color=board_color,
+        board_gray=board_gray,
     ) for sgf in sgfs]
     layout = prepare_layout(num_sgfs_per_page)
     d = create_sh(canvases, layout, vertical=False, save_boxes=False)

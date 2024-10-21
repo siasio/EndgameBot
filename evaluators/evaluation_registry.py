@@ -16,9 +16,9 @@ evaluator_classes = {
 
 
 class EvaluationRegistry:
-    def __init__(self):
+    def __init__(self, **initialized_evaluators):
         self.evaluation_registry: Dict[str, Evaluation] = {}
-        self.evaluator_registry: Dict[str, AbstractEvaluator] = {}
+        self.evaluator_registry: Dict[str, AbstractEvaluator] = initialized_evaluators
 
     def get_evaluator(self, evaluator_name: str, **evaluator_kwargs) -> AbstractEvaluator:
         evaluator_key = self.get_key(evaluator_name, **evaluator_kwargs)
@@ -44,6 +44,8 @@ class EvaluationRegistry:
 
     def __call__(self, position: GameNode, mask: np.ndarray, evaluator_name: str, **evaluator_kwargs):
         evaluator = self.get_evaluator(evaluator_name, **evaluator_kwargs)
+        # print(evaluator_name, evaluator_kwargs)
+        # print(evaluator, str(evaluator))
         evaluation_key = evaluator.get_key(position, mask)
         evaluation_key = json.dumps({'evaluator': evaluator_name, 'evaluation_key': evaluation_key})
         if evaluation_key not in self.evaluation_registry:

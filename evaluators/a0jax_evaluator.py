@@ -113,6 +113,10 @@ class A0jaxEvaluator(AbstractEvaluator):
         # self.done_queue.extend(evaluation)
         # print(len(self.done_queue), len(self.eval_queue))
 
+    def reset(self):
+        self.done_queue = []
+        super().reset()
+
 
 def stack_pos(node: GameNode):
     x, y = node.board_size

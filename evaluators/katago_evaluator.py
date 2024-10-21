@@ -136,6 +136,10 @@ class KatagoEvaluator(AbstractEvaluator):
         self.eng.shutdown(finish=True)
         super().shutdown()
 
+    def reset(self):
+        self.nodes_dict = {}
+        super().reset()
+
 
 def stack_pos(node: GameNode):
     x, y = node.board_size

@@ -52,16 +52,16 @@ class LocalPositionNode(GameNode):
         return moves_str
 
     def as_json(self):
-        l_children_ids = [hash(ch.moves_str) for ch in self.children if ch.player == 'B']
-        r_children_ids = [hash(ch.moves_str) for ch in self.children if ch.player == 'W']
+        l_children_ids = [ch.moves_str for ch in self.children if ch.player == 'B']
+        r_children_ids = [ch.moves_str for ch in self.children if ch.player == 'W']
         if self.ko_node is not None and not self.ko_node.is_root:
-            parent_id = hash(self.parent.moves_str)
+            parent_id = self.parent.moves_str
             if self.player == 'B':
                 r_children_ids.append(parent_id)
             else:
                 l_children_ids.append(parent_id)
         return {
-            "id": hash(self.moves_str),
+            "id": self.moves_str,
             "l_children": l_children_ids,
             "r_children": r_children_ids,
             "cgt_game": str(self.cgt_game)

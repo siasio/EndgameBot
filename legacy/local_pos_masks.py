@@ -69,9 +69,9 @@ def find_best_match(smaller_array, bigger_array):
     top_margin = smaller_array.shape[1] // 2
     bottom_margin = smaller_array.shape[1] - top_margin
     # Perform 2D convolution
-    typed_array = bigger_array.astype(np.float32)
-    new_array = np.zeros_like(bigger_array, dtype=np.float32)
-    # padded = np.zeros((bigger_array.shape[0] + left_margin + right_margin, bigger_array.shape[1] + top_margin + bottom_margin), dtype=np.float32)
+    typed_array = bigger_array.astype(float)
+    new_array = np.zeros_like(bigger_array, dtype=float)
+    # padded = np.zeros((bigger_array.shape[0] + left_margin + right_margin, bigger_array.shape[1] + top_margin + bottom_margin), dtype=float)
     # padded[left_margin: left_margin + bigger_array.shape[0], top_margin: top_margin + bigger_array.shape[1]] = bigger_array
     for i in range(left_margin, bigger_array.shape[0] - right_margin):
         for j in range(top_margin, bigger_array.shape[1] - bottom_margin):
@@ -467,7 +467,7 @@ class AnalyzedPosition:
         biggest_y_distance_from_center = np.max(distances[:, 1])
         max_dist = biggest_y_distance_from_center + biggest_x_distance_from_center
         dist_delta = (d_high - d_low) / max_dist if max_dist > 0 else 0
-        neighborhood = np.zeros_like(original_mask).astype(np.float)
+        neighborhood = np.zeros_like(original_mask).astype(float)
         # set all neighbors of distance not bigger than biggest_distance_from_center to 1
         for x in range(original_mask.shape[0]):
             for y in range(original_mask.shape[1]):
@@ -476,6 +476,8 @@ class AnalyzedPosition:
                     dist = np.abs(x - center[0]) + np.abs(y - center[1])
                     neighborhood[x][y] = d_high - dist * dist_delta
         # sample ones with probabilities in neighborhood
+        # np.set_printoptions(formatter={'float': lambda x: "{0:0.2f}".format(x)}, linewidth=np.inf)
+        # print(neighborhood)
         expanded_mask = np.random.random(neighborhood.shape) < neighborhood
         expanded_mask = np.logical_or(expanded_mask, original_mask)
         return expanded_mask
@@ -485,16 +487,16 @@ class AnalyzedPosition:
         choice = random.choice([0, 1, 2])
         state = np.moveaxis(np.array(state), 0, -1)
         if choice == 0:
-            return state
+            return state, np.ones(mask.shape, dtype=bool)
         else:
             import cv2
             # TODO: don't convert back and forth between jax numpy and numpy
             dilated_mask = cv2.dilate(np.array(mask).astype(np.uint8),
-                                      np.ones((random.randint(3, 8), random.randint(3, 8)), np.uint8), iterations=1)
+                                      np.ones((random.randint(4, 8), random.randint(3, 8)), np.uint8), iterations=1)
             if choice == 1:
                 dilated_mask = np.logical_or(dilated_mask, np.random.random(dilated_mask.shape) < 0.5)
             dilated_mask = np.array(dilated_mask)
-            return np.concatenate((state[..., :-1] * dilated_mask[..., None], state[..., -1:]), axis=-1)
+            return np.concatenate((state[..., :-1] * dilated_mask[..., None], state[..., -1:]), axis=-1), dilated_mask
 
     def get_single_local_pos(self, move_num=None, use_secure_territories=False, agent=None,
                              number_of_alternative_positions=4, randomize_previous_moves_number=True,
@@ -525,10 +527,9 @@ class AnalyzedPosition:
         available_values = set(list(range(1, num_segments + 1)))
         for i in range(1, num_segments + 1):
             segment_size = (reasonable_segmentation == i).sum()
-            if segment_size > 15:  # or segment_size < 3:
+            if segment_size > 15 or segment_size < 5:
                 reasonable_segmentation[reasonable_segmentation == i] = 0
                 available_values.remove(i)
-
         if move_num is None:
             move_num = self.move_num
         node = self.game.root
@@ -536,12 +537,12 @@ class AnalyzedPosition:
         for _ in range(move_num - num_prev_positions_for_input):
             node = node.children[0]
         game = BaseGame(node)
-        game_for_vis = BaseGame(get_stones_from_game(game, copy_children=False))
         prev_positions = []
         for _ in range(num_prev_positions_for_input):
             prev_positions.append(np.array(self.stones_to_pos(game.stones, self.shape)))
             node = node.children[0]
             game.play(node.move)
+        game_for_vis = BaseGame(get_stones_from_game(game, copy_children=False))
         color_to_play = -1 if node.move.player == 'B' else 1
         assert color_to_play == self.color_to_play, "Assertion for the sake of training - perhaps, not always it should be like this"
         if not color_to_play == self.color_to_play:
@@ -585,10 +586,10 @@ class AnalyzedPosition:
         if use_secure_territories:
             # To learn about secure territories
             random_color = color_to_play  # self.randomize_color(allow_zero_color)
-            positions = self.pick_previous_positions(prev_positions, random_color, include_this_many_moves=7,
+            positions = self.pick_previous_positions(prev_positions, random_color, include_this_many_moves=8,
                                                      randomize_previous_moves_number=randomize_previous_moves_number,
-                                                     force_include_prev_pos=False)
-            positions = self.apply_random_masking(positions, secure_segment)
+                                                     force_include_this_many_moves=0)
+            positions, random_mask = self.apply_random_masking(positions, secure_segment)
             to_return.append(
                 (secure_segment, positions, None, None, np.round(self.continuous_ownership) * random_color))
 
@@ -602,52 +603,67 @@ class AnalyzedPosition:
             copied_game_for_vis: BaseGame = copy_root_pos(game_for_vis)
             original_local_mask = (reasonable_segmentation == i).astype(np.uint8)
             dilated_local_mask = cv2.dilate(original_local_mask, kernel_medium)
-            local_mask = self.expand_mask_around_random_center(original_local_mask, dilated_local_mask)
+            local_mask = self.expand_mask_around_random_center(dilated_local_mask, dilated_local_mask)  # was original_local_mask
             local_mask = np.logical_and(local_mask, np.logical_or(self.segmentation == 0, self.segmentation == i))
             local_mask = np.logical_and(local_mask, self.board_mask)
             current_move_is_local = np.logical_and(dilated_move_array, local_mask).sum() > 0
+            play_moves = random.choice([True, False])
             if agent is None:
                 # random_color = color_to_play  # self.randomize_color(allow_zero_color)
                 sente_list = []
                 next_move_list = []
+                next_node = node.children[0]
                 for next_move_num in range(8):
-                    play_moves = random.choice([True, False])
-                    coords, player, _, cur_sente = self.get_first_local_move(local_mask, node=node.children[0],
+                    cur_move, next_node, _, cur_sente = self.get_first_local_move(local_mask, node=next_node,
                                                                              game=copied_game, play_moves=play_moves)
-                    if coords is None:
+                    if cur_move is None:
                         break
-                    cur_move = Move(coords, player)
                     next_move_list.append(cur_move)
                     sente_list.append(cur_sente)
                     if not play_moves:
                         # We didn't play all the moves which led to the current position, but we need to play at least the current move
-                        copied_game.play(cur_move)
+                        try:
+                            copied_game.play(cur_move, ignore_ko=True)
+                            # print("Played here")
+                        except Exception as e:
+                            print(cur_move)
+                            print(copied_game.__repr__())
+                            raise e
                     next_positions.append(np.array(self.stones_to_pos(copied_game.stones, self.shape)))
 
-                num_next_positions_to_show = random.choice(range(min(len(next_positions), 7)))
+                num_next_positions_to_show = random.choice(range(min(len(next_positions), 7) + 1))
+                target_move = next_move_list[num_next_positions_to_show] if num_next_positions_to_show < len(
+                    next_move_list) else None
                 next_move_list = next_move_list[:num_next_positions_to_show]
                 final_color_to_play = color_to_play if num_next_positions_to_show == 0 else (-1 if next_move_list[-1].player == 'B' else 1)
                 for cur_move in next_move_list:
-                    copied_game_for_vis.play(cur_move)
+                    copied_game_for_vis.play(cur_move, ignore_ko=True)
 
                 cur_sente = False
-                if num_next_positions_to_show < len(next_positions):
-                    cur_move = next_move_list[num_next_positions_to_show]
-                    coords, player = cur_move.coords, cur_move.player
-                    sgf_coords = cur_move.sgf((self.size_x, self.size_y))
-                    copied_game_for_vis.current_node.add_list_property('AB' if player == 'B' else 'AW', [sgf_coords])
+                if target_move is not None:
+                    coords, player = target_move.coords, 1 if target_move.player == 'B' else -1
+                    sgf_coords = target_move.sgf((self.size_x, self.size_y))
+                    copied_game_for_vis.current_node.add_list_property('AB' if player == 1 else 'AW', [sgf_coords])
                     if not (num_next_positions_to_show == 0 and not current_move_is_local):
                         cur_sente = sente_list[num_next_positions_to_show]
 
                     if cur_sente:
                         copied_game_for_vis.current_node.add_list_property('LB', [f'{sgf_coords}:!'])
                     else:
-                        copied_game_for_vis.current_node.add_list_property('TR', [sgf_coords])
+                        copied_game_for_vis.current_node.add_list_property('LB', [f'{sgf_coords}:-'])
 
                     player = player * final_color_to_play
                 else:
                     coords, player = None, None
-                positions = prev_positions[-8 + len(next_positions):] + next_positions
+
+                # Add square label to all intersections for which mask is 1
+                copied_game_for_vis.root.add_list_property('SQ', [Move((x, y)).sgf((self.size_x, self.size_y))
+                                                            for x in range(self.size_x) for y in range(self.size_y)
+                                                            if local_mask[x][y]])
+
+                positions = next_positions
+                if len(next_positions) < 8:
+                    positions = prev_positions[-8 + len(next_positions):] + positions
                 # if random.choice([0, 1]):
                 #     prev_pos = prev_pos[:, ::-1]
                 #     cur_pos = cur_pos[:, ::-1]
@@ -662,11 +678,17 @@ class AnalyzedPosition:
                 #     local_mask = local_mask[::-1, :]
                 #     if coords:
                 #         coords = (self.pad_size - coords[0] - 1, coords[1])
-                positions = self.pick_previous_positions(positions, final_color_to_play, include_this_many_moves=7,
+                positions = self.pick_previous_positions(positions, final_color_to_play, include_this_many_moves=8,
                                                          randomize_previous_moves_number=randomize_previous_moves_number,
                                                          force_include_this_many_moves=num_next_positions_to_show)
 
-                positions = self.apply_random_masking(positions, local_mask)
+                positions, random_mask = self.apply_random_masking(positions, local_mask)
+                # Remove from copied_game_for_vis root all stones (AW, AB) which are where random_mask is 0
+                copied_game_for_vis.root.properties['AB'] = [coords for coords in copied_game_for_vis.root.properties['AB']
+                                                                if random_mask[Move.from_sgf(coords, (self.size_x, self.size_y)).coords]]
+                copied_game_for_vis.root.properties['AW'] = [coords for coords in copied_game_for_vis.root.properties['AW']
+                                                                if random_mask[Move.from_sgf(coords, (self.size_x, self.size_y)).coords]]
+
                 to_return.append((local_mask, positions, coords, player, self.continuous_ownership * final_color_to_play,
                                   cur_sente, copied_game_for_vis.root.sgf()))
             if counter >= number_of_alternative_positions:
@@ -691,11 +713,17 @@ class AnalyzedPosition:
         while True:
             if node.move and node.move.coords:
                 if play_moves:
-                    game.play(node.move)
+                    try:
+                        game.play(node.move, ignore_ko=True)
+                        # print('Played move')
+                    except Exception as e:
+                        print(node.move)
+                        print(game.__repr__())
+                        raise e
                 x, y = node.move.coords
+                next_node = node.children[0] if node.children else None
                 if mask[x][y] == 1:
-                    player = 1 if node.player == 'B' else -1
-                    return (x, y), player, counter, sente
+                    return node.move, next_node, counter, sente
                 else:
                     sente = False
             else:
@@ -705,7 +733,8 @@ class AnalyzedPosition:
             counter += 1
             node = node.children[0]
         # No move was played in the masked region after starting from move start_move
-        return None, None, counter, False
+        next_node = node.children[0] if node.children else None
+        return None, next_node, counter, False
 
     def reset_predictions(self):
         self.predicted_ownership = np.array([[0 for y in range(self.pad_size)]

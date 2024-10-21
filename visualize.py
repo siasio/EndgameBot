@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QLabel, QHBoxLay
     QGraphicsView, \
     QStyleOptionGraphicsItem, QGraphicsItem, QSpinBox
 
+from common.utils import get_ground_truth, almost_equal
 from helpers import logging_context_manager
 from sgf_utils.sgf_parser import Move
 import json
@@ -52,7 +53,7 @@ def qp(p):
 
 class GoBoard(QWidget):
     def __init__(self, config='a0kata_estimated.yaml', parent=None, size=19, stone_radius=20, margin=30, b_border=2, w_border=1.5, b_radius=.92,
-                 w_radius=.88, **kwargs):
+                 w_radius=.88, use_100_scale=True, **kwargs):
         super().__init__(parent, **kwargs)
         # self.size = size
         if isinstance(size, list):
@@ -67,6 +68,7 @@ class GoBoard(QWidget):
         self.w_border = w_border
         self.b_radius = b_radius
         self.w_radius = w_radius
+        self.use_100_scale = use_100_scale
 
         self.setMinimumSize((self.size_y - 1) * self.stone_radius * 2 + self.margin * 2,
                             (self.size_y - 1) * self.stone_radius * 2 + self.margin * 2)
@@ -75,30 +77,17 @@ class GoBoard(QWidget):
         with open(os.path.join('analysis_config', config), 'r') as f:
             self.config = yaml.safe_load(f)
         self.position_tree = PyQtPositionTree(LocalPositionNode(), config=self.config, parent_widget=self)
-        # self.position_tree.goban = self
         self.reset_numbers()
-        # self.show_segmentation = False
-        # self.show_ownership = False
-        # self.show_predicted_ownership = False
-        # self.show_predicted_moves = False
-        # self.show_black_scores = False
-        # self.show_white_scores = False
         self.show_actual_move = False
-        # self.agent = self.load_agent(os.path.join(os.getcwd(), 'models', "conv1x1-pretr-0405b-final.ckpt")) #-frozen trained_2023-12.ckpt
-        # self.position_tree.load_agent(self.agent)
         self.from_pkl = False
         self.default_event_handler = self.handle_default_event
         self.stone_numbers = np.array([[None for y in range(self.size_y)] for x in range(self.size_x)])
         self.last_number = 0
 
-        # Add a GameTree widget
-        # self.game_tree = GameTree(self)
-        # self.game_tree.setGeometry(self.width() - 200, 0, 200, self.height())
-        # self.game_tree.setStyleSheet("QWidget { background-color: #D3D3D3; }")
-
         self.mutex = QMutex()
         self.paint_event_done = threading.Event()  # Initialize the event
         self.built_tree = False
+        self.gt = None
 
     def wait_for_paint_event(self):
         with QMutexLocker(self.mutex):
@@ -112,12 +101,6 @@ class GoBoard(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-
-        # if self.a0pos is None:
-        #     print("a0pos is None")
-        #     print("Current move", self.position_tree.current_node.move)
-        #     painter.end()
-        #     return
 
         def draw_text(x_coord, y_coord, text_to_draw):
             rect = painter.fontMetrics().boundingRect(text_to_draw)
@@ -217,8 +200,8 @@ class GoBoard(QWidget):
                         painter.drawRect(x - int(self.stone_radius // 2), y - int(int(self.stone_radius) // 2),
                                          int(self.stone_radius), int(self.stone_radius))
                     elif self.ownership_choice == "show_as_percentages" and should_show_percentage(i, j):
-                        painter.setPen(QColor("white" if arr[i][j] == 'B' else "black"))
-                        percentage = int(50 * (gt_ownership[i][j] + 1))
+                        painter.setPen(QColor("white" if arr[i][j] == BLACK else "black"))
+                        percentage = int(50 * (gt_ownership[i][j] + 1)) if self.use_100_scale else round(gt_ownership[i][j])
                         draw_text(x, y, str(percentage))
                     elif self.ownership_choice == "don't_show":
                         pass
@@ -242,12 +225,12 @@ class GoBoard(QWidget):
                             painter.drawEllipse(x - move_size, y - move_size, 2 * move_size, 2 * move_size)
 
                     elif self.move_choice == "black_scores" and should_show_score(i, j):
-                        painter.setPen(QColor("white" if arr[i][j] == 'B' else "black"))
+                        painter.setPen(QColor("white" if arr[i][j] == BLACK else "black"))
                         num = int(100 * evaluation.black_moves[i][j])
                         draw_text(x, y, str(num))
 
                     elif self.move_choice == "white_scores" and should_show_score(i, j):
-                        painter.setPen(QColor("white" if arr[i][j] == 'B' else "black"))
+                        painter.setPen(QColor("white" if arr[i][j] == BLACK else "black"))
                         num = int(100 * evaluation.white_moves[i][j])
                         draw_text(x, y, str(num))
 
@@ -401,8 +384,9 @@ class GoBoard(QWidget):
 
     def clear_board(self):
         self.reset_numbers()
+        initialized_engines = self.position_tree.eval.evaluator_registry if self.position_tree else {}
         del self.position_tree
-        self.position_tree = PyQtPositionTree(LocalPositionNode(), config=self.config, parent_widget=self)
+        self.position_tree = PyQtPositionTree(LocalPositionNode(), config=self.config, parent_widget=self, **initialized_engines)
         # self.position_tree.load_agent(self.agent)
         # self.position_tree.goban = self
         self.update()
@@ -416,17 +400,24 @@ class GoBoard(QWidget):
         self.stone_numbers = np.array([[None for y in range(self.size_y)] for x in range(self.size_x)])
         self.last_number = 0
 
-    # @property
-    # def a0pos(self):
-    #     return self.position_tree.current_node.a0pos
-
     def visualize_position(self, gtp_position):
         # a0pos = AnalyzedPosition.from_gtp_log(gtp_position) if not self.from_pkl else AnalyzedPosition.from_jax(gtp_position)
         # self.position_tree = PositionTree.from_a0pos(a0pos, parent_widget=self)
-        print(gtp_position)
+        # print(gtp_position)
+        # Set str(gtp_position) as the window title
+        self.parent().setWindowTitle(str(gtp_position))
+
         assert gtp_position.endswith('.sgf'), 'Parsing of non sgf positions hasn\'t been implemented yet'
         root_node: LocalPositionNode = LocalPositionSGF.parse_file(gtp_position)
-        self.position_tree = PyQtPositionTree(root_node, config=self.config, parent_widget=self, game_name=os.path.basename(gtp_position))
+        self.gt = None
+        if root_comment := root_node.get_property("C"):
+            try:
+                self.gt = get_ground_truth(root_comment)
+            except AssertionError:
+                pass
+        intitialized_engines = self.position_tree.eval.evaluator_registry if self.position_tree else {}
+        del self.position_tree
+        self.position_tree = PyQtPositionTree(root_node, config=self.config, parent_widget=self, game_name=os.path.basename(gtp_position), **intitialized_engines)
         # self.position_tree.goban = self
         # self.position_tree.update_a0pos_state()
 
@@ -439,17 +430,6 @@ class GoBoard(QWidget):
         self.reset_numbers()
         self.update()
 
-    def load_agent(self, ckpt_path):
-        backbone = ResnetPolicyValueNet128(input_dims=(9, 9, 9), num_actions=82)
-        agent = TransferResnet(backbone)
-        agent = agent.eval()
-        with open(ckpt_path, "rb") as f:
-            loaded_agent = pickle.load(f)
-            if "agent" in loaded_agent:
-                loaded_agent = loaded_agent["agent"]
-            agent = agent.load_state_dict(loaded_agent)
-        return agent
-
 # Write a class, inheriting from QWidget, which shows a game tree. The game tree will be a binary tree.
 # The root node should be represented on the top, and its children should be represented below it.
 
@@ -459,7 +439,7 @@ class CurrentNodeKeeper:
         self.current_node = current_node
 
 
-class GameTree(QGraphicsView):
+class DrawnTree(QGraphicsView):
     def __init__(self, parent: GoBoard = None, **kwargs):
         super().__init__(parent, **kwargs)
 
@@ -482,10 +462,12 @@ class GameTree(QGraphicsView):
         self.position_tree = None
 
     def create_tree(self, position_tree):
+        if position_tree == self.position_tree:
+            return
         self.position_tree = position_tree
         def draw_node(node, parnt=None, corner=True, anchor1=None, anchor2=None, hor_spac=0.0, node_radius=40.0, sibling_node=None, spac_from_parnt=None):
             if node not in self.node_dict:
-                node_widget = NodeWidget(parent=self.main_widget, position_tree=position_tree, node=node, size=QSizeF(node_radius, node_radius), current_node=self.current_node_keeper)
+                node_widget = NodeWidget(drawn_tree=self, position_tree=position_tree, node=node, size=QSizeF(node_radius, node_radius), current_node=self.current_node_keeper, parent_node=parnt)
                 self.node_dict[node] = node_widget
                 draw_line = parnt is not None
 
@@ -547,12 +529,14 @@ class GameTree(QGraphicsView):
                             spac_from_parnt = (hor_spac - new_hor_spac - node_radius - new_node_radius) / 2
                         else:
                             spac_from_parnt = None
-                        draw_node(child, node_widget, corner=True, anchor1=Qt.AnchorLeft, anchor2=Qt.AnchorRight, hor_spac=new_hor_spac, node_radius=new_node_radius, sibling_node=sibling_node, spac_from_parnt=spac_from_parnt)
+                        draw_node(child, node_widget, corner=True, anchor1=Qt.AnchorRight, anchor2=Qt.AnchorLeft, hor_spac=new_hor_spac, node_radius=new_node_radius, sibling_node=sibling_node, spac_from_parnt=spac_from_parnt)
                         sibling_node = self.node_dict[child]
 
         node_radius = self.main_widget.geometry().width() / 15
 
-        self.main_layout.setVerticalSpacing(self.main_widget.geometry().height() / 9 - node_radius)
+        depth = max(position_tree.root.expanded_tree_depth, 9)
+        max_ver_spac = self.main_widget.geometry().height() / depth - node_radius
+        self.main_layout.setVerticalSpacing(max_ver_spac)
         self.current_node_keeper.current_node = position_tree.root
         print("About to draw the node")
         draw_node(
@@ -564,11 +548,13 @@ class GameTree(QGraphicsView):
             hor_spac=self.main_widget.geometry().width(),  # * .5 - 2 * node_radius,
             node_radius=node_radius,
         )
+        self.update()
 
     def clear_tree(self):
         if self.position_tree is not None:
             self.position_tree.go_to_node(self.position_tree.root)
             self.position_tree.reset_tree()
+            self.position_tree = None
         # Delete all created NodeWidgets and AnchorLines from the scene
         for node in self.node_dict:
             if node.parent is not None:
@@ -576,6 +562,8 @@ class GameTree(QGraphicsView):
         for item in self.main_scene.items():
             if isinstance(item, AnchorLine):
                 self.main_scene.removeItem(item)
+        # update what is shown in the window
+        self.update()
         # self.create_tree()
 
     def update_widget(self):
@@ -588,6 +576,37 @@ class GameTree(QGraphicsView):
     def resizeEvent(self, event):
         self.update_widget()
         super().resizeEvent(event)
+
+    # On bottom arrow call the mouse press event of the first child of the current node
+    def keyPressEvent(self, event):
+        current_node_widget = self.node_dict[self.current_node_keeper.current_node]
+        if event.key() == Qt.Key_Down:
+            if current_node_widget.children_nodes:
+                # call the mousePressEvent as if the left button was pressed
+                current_node_widget.children_nodes[0].mousePressEvent(QtGui.QMouseEvent(QtGui.QMouseEvent.MouseButtonPress, QtCore.QPoint(), QtCore.Qt.LeftButton, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier))
+        elif event.key() == Qt.Key_Up:
+            if current_node_widget.parent_node:
+                current_node_widget.parent_node.mousePressEvent(QtGui.QMouseEvent(QtGui.QMouseEvent.MouseButtonPress, QtCore.QPoint(), QtCore.Qt.LeftButton, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier))
+        elif event.key() == Qt.Key_Right:
+            parent = current_node_widget.parent_node
+            if parent:
+                for child_index, child in enumerate(parent.children_nodes):
+                    if child == current_node_widget:
+                        if child_index + 1 < len(parent.children_nodes):
+                            parent.children_nodes[child_index + 1].mousePressEvent(QtGui.QMouseEvent(QtGui.QMouseEvent.MouseButtonPress, QtCore.QPoint(), QtCore.Qt.LeftButton, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier))
+                        break
+                else:
+                    raise ValueError("Current node is not a child of its parent!")
+        elif event.key() == Qt.Key_Left:
+            parent = current_node_widget.parent_node
+            if parent:
+                for child_index, child in enumerate(parent.children_nodes):
+                    if child == current_node_widget:
+                        if child_index - 1 >= 0:
+                            parent.children_nodes[child_index - 1].mousePressEvent(QtGui.QMouseEvent(QtGui.QMouseEvent.MouseButtonPress, QtCore.QPoint(), QtCore.Qt.LeftButton, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier))
+                        break
+                else:
+                    raise ValueError("Current node is not a child of its parent!")
 
     # def mouseMoveEvent(self, event):
     #     pos = event.pos()
@@ -644,11 +663,12 @@ class AnchorLine(QGraphicsItem):
 
 
 class NodeWidget(QGraphicsWidget):
-    def __init__(self, parent=None, position_tree: PyQtPositionTree = None, node: LocalPositionNode = None, size=QSizeF(20, 20), current_node=None):
-        super().__init__(parent)
+    def __init__(self, drawn_tree=None, position_tree: PyQtPositionTree = None, node: LocalPositionNode = None, size=QSizeF(20, 20), current_node=None, parent_node=None):
+        super().__init__()
         self.setAcceptHoverEvents(True)
         self.node = node
         self.position_tree = position_tree
+        self.drawn_tree = drawn_tree
 
         self.setMinimumSize(size)
         self.setMaximumSize(size)
@@ -664,6 +684,10 @@ class NodeWidget(QGraphicsWidget):
         self.setCursor(Qt.PointingHandCursor)
         self.setToolTip(str(node.move))
         self.current_node_keeper = current_node
+        self.children_nodes = []
+        self.parent_node = parent_node
+        if parent_node is not None:
+            parent_node.children_nodes.append(self)
 
     def paint(self,
               painter: QPainter,
@@ -691,6 +715,9 @@ class NodeWidget(QGraphicsWidget):
         if event.button() == Qt.LeftButton:
             self.position_tree.go_to_node(self.node)
             self.current_node_keeper.current_node = self.node
+            self.drawn_tree.update()
+        else:
+            print(f'Unknown button {event.button()}')
 
 
 class MainWindow(QMainWindow):
@@ -698,7 +725,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Go Board")
         self.setStyleSheet("QWidget { background-color: #B0C4DE; }")
-
+        self.show_as_temp = False
         # get screen resolution
         screen_resolution = QApplication.desktop().screenGeometry()
         board_width = min(screen_resolution.width(), screen_resolution.height())
@@ -708,8 +735,8 @@ class MainWindow(QMainWindow):
 
         # create the widgets
         self.go_board = GoBoard(parent=self, size=int(BOARD_SIZE), stone_radius=int(intersection_size), margin=int(margin_size))
-        self.game_tree = GameTree(self.go_board)
-        self.game_tree.setStyleSheet("QWidget { background-color: #B19886; }")
+        self.drawn_tree = DrawnTree(self.go_board)
+        self.drawn_tree.setStyleSheet("QWidget { background-color: #B19886; }")
 
         self.move_buttons = QButtonGroup()
         self.move_buttons.setProperty("name", "move choice")
@@ -878,7 +905,7 @@ class MainWindow(QMainWindow):
         navigation_layout.addWidget(self.next_button)
 
         buttons_layout.addStretch()
-        self.label = QLabel("B + ?")
+        self.label = QLabel("Game tree not built yet")
         self.label.setStyleSheet("QLabel {"
                                  "font-size: 24px;"
                                  "padding: 20px;"
@@ -891,7 +918,7 @@ class MainWindow(QMainWindow):
 
         main_layout = QHBoxLayout()
         main_layout.addWidget(self.go_board, 3)
-        main_layout.addWidget(self.game_tree, 1)
+        main_layout.addWidget(self.drawn_tree, 1)
         main_layout.addLayout(buttons_layout, 1)
 
         central_widget = QWidget(self)
@@ -952,10 +979,12 @@ class MainWindow(QMainWindow):
         if self.current_position_index < len(self.positions) - 1:
             self.current_position_index += 1
             self.visualize_position()
+            self.set_up_position()
+            self.set_up_position()
 
     def set_up_position(self):
         if self.set_up_button.isChecked():
-            self.game_tree.clear_tree()
+            self.drawn_tree.clear_tree()
             self.set_up_button.setText("Finish and analyze")
             self.set_up_frame.show()
             # self.depth_slider.show()
@@ -1028,22 +1057,27 @@ class MainWindow(QMainWindow):
         # ownership = self.go_board.position_tree.current_node.calculated_ownership
         self.thread = self.go_board.position_tree
         self.thread.update_signal.connect(self.update_tree)
+        self.thread.error_signal.connect(self.update_tree)
         self.thread.start()
 
-    def update_tree(self):
-        print("Updated")
+    def update_tree(self, error_message=None):
+        # print("Updated")
         self.go_board.built_tree = True
         self.go_board.update()
-        self.game_tree.create_tree(self.go_board.position_tree)
+        self.drawn_tree.create_tree(self.go_board.position_tree)
+        if error_message is not None:
+            print(error_message)
         self.update_buttons()
-        print("Done!!!")
+        # print("Done!!!")
 
     def select_directory(self):
         settings = QSettings("GoBoard", "Settings")
         last_directory = settings.value("last_directory")
 
         dialog = QFileDialog(self, "Select Directory")
-        dialog.setFileMode(QFileDialog.AnyFile)
+        dialog.setFileMode(QFileDialog.Directory)
+        # dialog.setOption(QFileDialog.ShowDirsOnly, True)
+        # dialog.setFileMode(QFileDialog.AnyFile)
 
         if last_directory:
             dialog.setDirectory(last_directory)
@@ -1081,31 +1115,33 @@ class MainWindow(QMainWindow):
 
     def update_buttons(self):
         if not self.go_board.built_tree:
-            print("Tree not built!")
+            self.label.setText("Game tree not built yet")
             return
         cgt_game = self.go_board.position_tree.current_node.cgt_game
-        print("Tree built!", cgt_game, self.go_board.position_tree.current_node == self.go_board.position_tree.root)
+        cgt_game_with_line_breaks = "<br>".join([str(cgt_game)[i:i + 40] for i in range(0, len(str(cgt_game)), 25)])
+        # print("Tree built!", cgt_game, self.go_board.position_tree.current_node == self.go_board.position_tree.root)
         try:
-            self.label.setText(f'Temperature: {float(cgt_game.temp):.2f} points\n'
-                               f'Local score: {float(cgt_game.mean):.2f}')
+            # split the cgt_game string into lines after every 25th character
+            if not cgt_game.is_ok:
+                self.label.setText(f'Game is not OK<br>{cgt_game_with_line_breaks}')
+            elif not cgt_game.found_mt3:
+                self.label.setText(f"<span style='color: red;'>Game is OK but still BAD</span><br>{cgt_game_with_line_breaks}")
+            else:
+                text = f'Temperature: {float(cgt_game.temp):.2f} points' if self.show_as_temp else f'Move value: {2 * float(cgt_game.temp) - 2:.2f} points'
+                if self.go_board.gt is not None and self.go_board.position_tree.current_node == self.go_board.position_tree.root:
+                    if almost_equal(float(2 * cgt_game.temp - 2), self.go_board.gt):
+                        text += f"<br><span style='color: green;'>CORRECT!</span>"
+                    else:
+                        text += f"<br><span style='color: red;'>WRONG!</span> Ground truth: {self.go_board.gt}"
+                text = f'{text}<br>Local score: {float(cgt_game.mean):.2f}'
+                self.label.setText(text)
         except:
-            self.label.setText(f'CGT calculations failed')
+            self.label.setText(f"<span style='color: red;'>CGT calculations failed for:</span><br>{cgt_game_with_line_breaks}")
         evaluation = self.go_board.position_tree.eval_for_node()
         black_move_prob = evaluation.black_prob * (1 - evaluation.no_move_prob)
         white_move_prob = evaluation.white_prob * (1 - evaluation.no_move_prob)
         no_move_prob = evaluation.no_move_prob
 
-        # black_move_prob = self.go_board.a0pos.black_move_prob
-        # white_move_prob = self.go_board.a0pos.white_move_prob
-        # no_move_prob = self.go_board.a0pos.no_move_prob
-        # elif next_pl == NextMovePlayer.none:
-        #     self.label.setText(f'Finished position\n'
-        #                        f'Local score: {mean:.2f}')
-        # elif next_pl == NextMovePlayer.black or next_pl == NextMovePlayer.white:
-        #     self.label.setText(f'Sente - {next_pl.name} plays next\n'
-        #                        f'Local score: {mean:.2f}')
-        # else:
-        #     self.label.setText(f'Set up position and analyze')
         self.black_prob_label.setText(f"Black move prob: {round(100 * black_move_prob)}%")
         self.white_prob_label.setText(f"White move prob: {round(100 * white_move_prob)}%")
         self.no_move_prob_label.setText(f"No move prob: {round(100 * no_move_prob)}%")
@@ -1114,7 +1150,8 @@ class MainWindow(QMainWindow):
         current_position = self.positions[self.current_position_index]
         # if not self.go_board.from_pkl:
         #     current_position = json.loads(current_position)
-
+        self.drawn_tree.clear_tree()
+        self.go_board.built_tree = False
         self.go_board.visualize_position(current_position)
         self.update_buttons()
 

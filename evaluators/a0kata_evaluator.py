@@ -74,6 +74,11 @@ class A0KataEvaluator(AbstractEvaluator):
         self.a0_evaluator.shutdown()
         super().shutdown()
 
+    def reset(self):
+        self.kata_evaluator.reset()
+        self.a0_evaluator.reset()
+        super().reset()
+
 
 def stack_pos(node: GameNode):
     x, y = node.board_size
