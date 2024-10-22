@@ -34,7 +34,12 @@ For training, it's recommended to use a machine with a dedicated GPU, and to ins
 
 ### Known issues
 
-Issues might arise if you use versions of `optax` or `chex` other than specified in the requirements file. Make sure that you have the correct versions installed.
+~~Issues might arise if you use versions of `optax` or `chex` other than specified in the requirements file. Make sure that you have the correct versions installed.~~
+Install the newest versions of `chex`, `opax`, `optax`, `pax3`, `jax`, `jaxlib` libraries.
+The original code was indeed written with older versions of these libraries, 
+which resulted in model graph for the pre-trained network being incompatible with the new versions.
+However, converting the pre-trained model into the newest version was not very difficult.
+Note that the current training code depends on functionalities added in newer versions of `jax`.
 
 Windows installation of GPU supported `jax` version from the community builds might prove impossible on specific computers. In such case, use the CPU version.
 
