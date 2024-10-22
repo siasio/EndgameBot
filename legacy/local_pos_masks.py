@@ -626,8 +626,8 @@ class AnalyzedPosition:
                             copied_game.play(cur_move, ignore_ko=True)
                             # print("Played here")
                         except Exception as e:
-                            print(cur_move)
-                            print(copied_game.__repr__())
+                            # print(cur_move)
+                            # print(copied_game.__repr__())
                             raise e
                     next_positions.append(np.array(self.stones_to_pos(copied_game.stones, self.shape)))
 
