@@ -87,12 +87,15 @@ class A0jaxEvaluator(AbstractEvaluator):
         states = states * opponent_signs[:, None, None, None]
         masks = jnp.stack([ev.mask for ev in evaluation])
         board_masks = None
-        action_logits, ownership_maps = self.agent((states, masks, board_masks), batched=True)
-        ownership_maps = np.array(ownership_maps * opponent_signs[:, None, None])
-        undecided_ownerships = jnp.sum((abs(ownership_maps) * 100 < (100 - ownership_strict_threshold)) * masks, axis=(1, 2)) > 0
-        scores = jnp.sum(ownership_maps * masks, axis=(1, 2))
+        outputs = self.agent((states, masks,), batched=True)  # was: ownership_maps
+        # ownership_maps = np.array(ownership_maps * opponent_signs[:, None, None])
+        # undecided_ownerships = jnp.sum((abs(ownership_maps) * 100 < (100 - ownership_strict_threshold)) * masks, axis=(1, 2)) > 0
+        # scores = jnp.sum(ownership_maps * masks, axis=(1, 2))
+        action_logits = outputs[0]
+        ownership_maps = [0] * len(action_logits)
+        scores = [0] * len(action_logits)
+        undecided_ownerships = [0] * len(action_logits)
         # it doesn't serve its purpose when we have a seki, but in other cases it can stop the analysis when territories are decided
-
 
         action_logits = softmax(action_logits, axis=-1)
         black_probs = jnp.sum(action_logits[:, board_size:2 * board_size]) / jnp.sum(action_logits[:, :2 * board_size], axis=-1)
@@ -101,11 +104,12 @@ class A0jaxEvaluator(AbstractEvaluator):
         black_next_moves /= jnp.sum(black_next_moves, axis=(1, 2), keepdims=True)
         white_next_moves = action_logits[:, :board_size].reshape(tensor_shape) * masks
         white_next_moves /= jnp.sum(white_next_moves, axis=(1, 2), keepdims=True)
+
         for black, no_move, black_moves, white_moves, ownership, score, undecided, opp, ev in zip(black_probs, no_move_probs, black_next_moves, white_next_moves, ownership_maps, scores, undecided_ownerships, opponent_signs, evaluation):
             ev.black_moves = black_moves if opp != -1 else white_moves
             ev.white_moves = white_moves if opp != -1 else black_moves
             ev.black_prob = black if opp != -1 else 1 - black
-            ev.no_move_prob = max(no_move, 1 - undecided)
+            ev.no_move_prob = no_move  # max(no_move, 1 - undecided)
             ev.ownership = ownership
             ev.score = self.quantize(score)  # To treat 0.91 prediction as 1 (sure Black's territory) and 0.1 like 0 (seki)
 

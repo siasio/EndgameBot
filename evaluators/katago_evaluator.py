@@ -10,7 +10,7 @@ from sgf_utils.base_katrain import KaTrainBase
 from sgf_utils.engine import KataGoEngine
 from sgf_utils.game_node import GameNode
 
-ownership_strict_threshold = 10
+ownership_strict_threshold = 30
 
 
 class KatagoEvaluator(AbstractEvaluator):

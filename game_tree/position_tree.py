@@ -18,7 +18,6 @@ class TreeBuildingException(Exception):
         self.message = message
 
 
-
 class PositionTree(BaseGame[LocalPositionNode]):
 
     def __init__(self, position_node: LocalPositionNode, config, game_name=None, **initialized_evaluators):
@@ -106,7 +105,8 @@ class PositionTree(BaseGame[LocalPositionNode]):
                     moves_to_play = best_moves
                 elif strategy in ['threshold', 'best+threshold']:
                     threshold = self.config['moves']['threshold']
-                    moves_to_play = self.good_moves(black_moves * black_prob, threshold, 'B') + self.good_moves(white_moves * white_prob, threshold, 'W')
+                    moves_to_play = self.good_moves(black_moves * black_prob, threshold, 'B') + self.good_moves(
+                        white_moves * white_prob, threshold, 'W')
                     if strategy == 'best+threshold':
                         for move in best_moves:
                             if move not in moves_to_play:
@@ -123,9 +123,10 @@ class PositionTree(BaseGame[LocalPositionNode]):
                     moves_to_play = black_moves_to_play + white_moves_to_play
                 elif strategy == 'estimateunlikely':
                     threshold = self.config['moves']['threshold']
+                    sente_threshold = self.config['moves']['sente_threshold']
 
-                    black_moves_to_play = self.good_moves(black_moves * black_prob, threshold, 'B')
-                    white_moves_to_play = self.good_moves(white_moves * white_prob, threshold, 'W')
+                    black_moves_to_play = self.good_moves(black_moves, threshold, 'B') if black_prob > sente_threshold else []  # was: * black_prob
+                    white_moves_to_play = self.good_moves(white_moves, threshold, 'W') if white_prob > sente_threshold else []  # was: * white_prob
                     move_to_estimate = None
                     if not self.current_node == self.root:
                         if black_moves_to_play and not white_moves_to_play:
@@ -183,47 +184,60 @@ class PositionTree(BaseGame[LocalPositionNode]):
             except:
                 pass
 
-    def build_tree(self, max_depth=None, delete_engine=True, reset_engine=False):
-        current_depth = 0
-        iterations_on_this_depth = 0
-        iter_num = 0
-        try:
-            with tqdm(position=0, leave=True) as pbar:
-                while not self.current_node.finished_calculation:
+    def build_tree(self, max_depth=None, delete_engine=True, reset_engine=False, verbose=True):
+        def calculate(pbar=None):
+            current_depth = 0
+            iterations_on_this_depth = 0
+            iter_num = 0
+            while not self.current_node.finished_calculation:
+                if pbar is not None:
                     # Show the current depth and the number of visited nodes on pbar
-                    pbar.set_description(f"[{self.game_name}] Depth: {str(current_depth).rjust(2)}, Iterations: {str(iterations_on_this_depth).rjust(3)}")
-                    iterations_on_this_depth += 1
-                    self.select_node()
-                    evaluation: Evaluation = self.eval_for_node(self.current_node)
-                    try:
-                        if max_depth is not None and current_depth >= max_depth:
-                            pass
-                            raise TreeBuildingException(f"Max depth exceeded")
-                            # print(f"Reached max tree depth ({current_depth})")
-                        else:
-                            self.expand_node(evaluation)
-                        self.backup(evaluation)
-                    except Exception as e:
-                        raise TreeBuildingException(f"Error while expanding node {self.current_node.move} at depth {current_depth}") from e
-                    assert self.current_node == self.root, "Current node is not root after backup"
-                    if self.current_node.expanded_tree_depth > current_depth:
-                        current_depth = self.current_node.expanded_tree_depth
-                        iterations_on_this_depth = 0
-
+                    pbar.set_description(
+                        f"[{self.game_name}] Depth: {str(current_depth).rjust(2)}, Iterations: {str(iterations_on_this_depth).rjust(3)}")
+                iterations_on_this_depth += 1
+                self.select_node()
+                evaluation: Evaluation = self.eval_for_node(self.current_node)
+                try:
+                    if max_depth is not None and current_depth >= max_depth:
+                        pass
+                        raise TreeBuildingException(f"Max depth exceeded")
+                        # print(f"Reached max tree depth ({current_depth})")
+                    else:
+                        self.expand_node(evaluation)
+                    self.backup(evaluation)
+                except Exception as e:
+                    raise TreeBuildingException(
+                        f"Error while expanding node {self.current_node.move} at depth {current_depth}") from e
+                assert self.current_node == self.root, "Current node is not root after backup"
+                if self.current_node.expanded_tree_depth > current_depth:
+                    current_depth = self.current_node.expanded_tree_depth
+                    iterations_on_this_depth = 0
+                if pbar is not None:
                     pbar.update(1)
-                    iter_num += 1
+                iter_num += 1
+            return iter_num
+
+        try:
+            if verbose:
+                with tqdm(position=0, leave=True) as pbar:
+                    iter_num = calculate(pbar)
+            else:
+                iter_num = calculate(pbar=None)
 
             self.iter_num = iter_num
-            self.inference_num = self.eval.get_evaluator(self.evaluator_name, **self.config['evaluator_kwargs']).inference_count
+            self.inference_num = self.eval.get_evaluator(self.evaluator_name,
+                                                         **self.config['evaluator_kwargs']).inference_count
         finally:
             if delete_engine:
-                print("Shutting down engines")
+                if verbose:
+                    print("Shutting down engines")
                 keys = list(self.eval.evaluator_registry.keys())
                 for key in keys:
                     engine = self.eval.evaluator_registry.pop(key)
                     engine.shutdown()
             elif reset_engine:
-                print("Resetting engines")
+                if verbose:
+                    print("Resetting engines")
                 keys = list(self.eval.evaluator_registry.keys())
                 for key in keys:
                     engine = self.eval.evaluator_registry[key]
@@ -281,7 +295,8 @@ class PyQtPositionTree(PositionTree, QThread):
     update_signal = pyqtSignal()
     error_signal = pyqtSignal(str)
 
-    def __init__(self, position_node: LocalPositionNode, config, parent_widget, game_name=None, **initialized_evaluators):
+    def __init__(self, position_node: LocalPositionNode, config, parent_widget, game_name=None,
+                 **initialized_evaluators):
         position_node.game = self
         PositionTree.__init__(self, position_node, config, game_name=game_name, **initialized_evaluators)
         QObject.__init__(self, parent_widget)
@@ -291,7 +306,7 @@ class PyQtPositionTree(PositionTree, QThread):
     def run(self):
         """Override run method of QThread to run calculations in the PyQt app"""
         try:
-            self.build_tree(delete_engine=False, reset_engine=True)
+            self.build_tree(delete_engine=False, reset_engine=True, max_depth=10)
         except Exception as e:
             # Signalize the error to the parent widget
             self.error_signal.emit(traceback.format_exc())

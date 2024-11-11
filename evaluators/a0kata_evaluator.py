@@ -15,6 +15,7 @@ class A0KataEvaluator(AbstractEvaluator):
         super().__init__()
         self.a0_evaluator = A0jaxEvaluator(a0_ckpt, a0_batch_size)
         self.kata_evaluator = KatagoEvaluator(kg_batch_size, **kata_kwargs)
+        self.min_a0_no_move_threshold = 0.1
 
     def set_moves_for_color(self, evaluation: Union[List[Evaluation], Evaluation], color: str):
         self.set_all(evaluation)
@@ -55,7 +56,10 @@ class A0KataEvaluator(AbstractEvaluator):
             ev.black_moves = a0_ev.black_moves
             ev.white_moves = a0_ev.white_moves
             ev.black_prob = a0_ev.black_prob
-            ev.no_move_prob = max(kata_ev.no_move_prob, a0_ev.no_move_prob)
+            ev.no_move_prob = max(
+                (kata_ev.no_move_prob if a0_ev.no_move_prob > self.min_a0_no_move_threshold else 0.0),
+                a0_ev.no_move_prob
+            )
             ev.ownership = kata_ev.ownership
             ev.score = kata_ev.score
         self.inference_count = self.a0_evaluator.inference_count# + self.kata_evaluator.inference_count
