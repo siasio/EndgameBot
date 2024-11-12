@@ -94,6 +94,7 @@ def run_benchmark(positions, config, max_depth, position_root_dir, output_basena
         start_time = time.time()
         output_dir = position_root_dir if os.path.isdir(position_root_dir) else os.path.dirname(position_root_dir)
         output_dir = os.path.join(output_root_dir, 'results', os.path.basename(output_dir), output_basename)
+        os.makedirs(output_dir, exist_ok=True)
         output_filepath = os.path.join(output_dir, 'results.yaml')
         results_per_pos = {}
         error_count = 0
