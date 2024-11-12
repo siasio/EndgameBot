@@ -18,9 +18,9 @@ evaluator_kwargs:
   altcommand: ""
   model: /home/siasio/KifuMining/katago/kata1-b18c384nbt-s6582191360-d3422816034.bin.gz
   config: /home/siasio/KifuMining/katago/analysis_config.cfg
-  threads: 1
-  max_visits: 1
-  fast_visits: 1
+  threads: 12
+  max_visits: 500
+  fast_visits: 25
   max_time: 8.0
   wide_root_noise: 0.0
   _enable_ownership: True
