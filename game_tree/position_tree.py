@@ -195,6 +195,7 @@ class PositionTree(BaseGame[LocalPositionNode]):
                     pbar.set_description(
                         f"[{self.game_name}] Depth: {str(current_depth).rjust(2)}, Iterations: {str(iterations_on_this_depth).rjust(3)}")
                 iterations_on_this_depth += 1
+                print("About to select node")
                 self.select_node()
                 evaluation: Evaluation = self.eval_for_node(self.current_node)
                 try:
@@ -218,6 +219,7 @@ class PositionTree(BaseGame[LocalPositionNode]):
             return iter_num
 
         try:
+            print("About to calculate")
             if verbose:
                 with tqdm(position=0, leave=True) as pbar:
                     iter_num = calculate(pbar)
