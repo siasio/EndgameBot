@@ -12,6 +12,9 @@ from common.utils import get_ground_truth, almost_equal
 from game_tree.local_position_node import LocalPositionNode, LocalPositionSGF
 from game_tree.position_tree import PositionTree
 
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = '.59'
+
+
 
 def find_temp(gtp_position, config, max_depth=20, output_sgf_path=None, output_json_path=None,
               initialized_engines=None, verbose=True):
