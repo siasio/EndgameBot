@@ -12,7 +12,7 @@ from common.utils import get_ground_truth, almost_equal
 from game_tree.local_position_node import LocalPositionNode, LocalPositionSGF
 from game_tree.position_tree import PositionTree
 
-os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = '.59'
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = '.79'
 
 
 
