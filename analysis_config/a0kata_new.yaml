@@ -1,0 +1,25 @@
+evaluator: a0kata
+mask:
+  from: sgf
+  marker: SQ
+moves:
+  from: evaluator
+  strategy: estimateunlikely  # Could be also 'threshold', 'best' or 'best+threshold'
+  threshold: 0.3
+  sente_threshold: 0.15
+  no_move_threshold: 0.3
+score:
+  from: evaluator
+evaluator_kwargs:
+  a0_ckpt: newdata_1110b.ckpt
+  a0_batch_size: 16
+  kg_batch_size: 1
+  katago: /home/test/PycharmProjects/katrain/katrain/KataGo/katago
+  altcommand: ""
+  model: /home/test/PycharmProjects/katrain/katrain/models/kata1-b18c384nbt-s6582191360-d3422816034.bin.gz
+  threads: 1
+  max_visits: 1
+  fast_visits: 1
+  max_time: 8.0
+  wide_root_noise: 0.0
+  _enable_ownership: True
