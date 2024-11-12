@@ -14,9 +14,10 @@ evaluator_kwargs:
   a0_ckpt: newdata_1110b.ckpt
   a0_batch_size: 16
   kg_batch_size: 1
-  katago: /home/test/PycharmProjects/katrain/katrain/KataGo/katago
+  katago: /home/siasio/KifuMining/katago
   altcommand: ""
-  model: /home/test/PycharmProjects/katrain/katrain/models/kata1-b18c384nbt-s6582191360-d3422816034.bin.gz
+  model: /home/siasio/KifuMining/kata1-b18c384nbt-s6582191360-d3422816034.bin.gz
+  config: /home/siasio/KifuMining/analysis_config.cfg
   threads: 1
   max_visits: 1
   fast_visits: 1
