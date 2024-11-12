@@ -12,26 +12,19 @@ from common.utils import get_ground_truth, almost_equal
 from game_tree.local_position_node import LocalPositionNode, LocalPositionSGF
 from game_tree.position_tree import PositionTree
 
-os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = '.79'
-
-
 
 def find_temp(gtp_position, config, max_depth=20, output_sgf_path=None, output_json_path=None,
               initialized_engines=None, verbose=True):
     game_name = os.path.basename(gtp_position)
     root_node: LocalPositionNode = LocalPositionSGF.parse_file(gtp_position)
     initialized_engines = initialized_engines or {}
-    print(f'Processing {game_name}')
     position_tree = PositionTree(root_node, config=config, game_name=game_name, **initialized_engines)
-    print(f'Processing {game_name}')
     gt = get_ground_truth(position_tree.root.get_property("C"))
-    print(f'Processing {game_name}')
     value = None
     temp = None
     not_ok_game = ""
     try:
         position_tree.build_tree(max_depth=max_depth, reset_engine=True, delete_engine=False, verbose=verbose)
-        print("Built tree")
         temp = float(position_tree.root.cgt_game.temp)
         value = 2 * temp - 2
     except Exception as e:
@@ -109,13 +102,13 @@ def run_benchmark(positions, config, max_depth, position_root_dir, output_basena
                 output_json = os.path.join(output_dir, 'analyzed_json',
                                            os.path.basename(os.path.dirname(position)) + '-' +
                                            os.path.splitext(os.path.basename(position))[0] + '.json')
-                print(f'Processing {position}')
                 gt, temp, iter_num, inferenece_num, depth, initialized_engines = find_temp(position, config,
                                                                                            max_depth,
                                                                                            output_sgf, output_json,
                                                                                            initialized_engines,
                                                                                            verbose=verbose)
-                print(f'GT: {gt}, Temp: {temp}, Iter: {iter_num}, Inference: {inferenece_num}, Depth: {depth}')
+                if verbose:
+                    print(f'GT: {gt}, Temp: {temp}, Iter: {iter_num}, Inference: {inferenece_num}, Depth: {depth}')
                 filename = str(Path(position).relative_to(position_root_dir))
                 cur_results = {'temp': temp, 'iterations': iter_num,
                                'depth': depth}  # , 'inferences': inferenece_num}
