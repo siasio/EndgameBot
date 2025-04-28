@@ -1,8 +1,6 @@
 import os
 from typing import Optional, Tuple, List
 
-from scipy.signal.windows import blackman
-
 from sgf_utils.game import BaseGame, KaTrainSGF
 from sgf_utils.game_node import GameNode
 from sgf_utils.sgf_parser import SGFNode
